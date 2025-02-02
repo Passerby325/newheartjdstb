@@ -629,7 +629,7 @@ export default function App() {
             <div className="center-column">
               <h1 className="title">Game Over</h1>
               <p className="result-text">
-                {playerHealth <= 0 ? "You Lost!" : "You Won!"}
+                {playerHealth <= 0 ? "You Lost!" : "Guess who won?"}
               </p>
               <button 
                 onClick={resetGame}
