@@ -17,8 +17,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+  const formatDateTime = (date) => {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+};
 export default function App() {
   // 基本游戏状态
+
   const [step, setStep] = useState("login");
   const [name, setName] = useState("");
   const [roomCode, setRoomCode] = useState("");
@@ -27,6 +31,8 @@ export default function App() {
   const [isPlayerA, setIsPlayerA] = useState(false);
   const [currentTime, setCurrentTime] = useState("2025-02-02 15:53:58");
   const [currentUser, setCurrentUser] = useState("Passerby325");
+
+ 
 
   // 游戏选择相关状态
   const [choice, setChoice] = useState("");
@@ -317,6 +323,15 @@ export default function App() {
     setOpponentNextRoundReady(false);
   }, [roomCode, db]);
 
+  useEffect(() => {
+  const timer = setInterval(() => {
+    setCurrentTime(formatDateTime(new Date()));
+  }, 1000);
+
+  return () => clearInterval(timer);
+}, []);
+
+
 // 👀 监听房间状态和对手
   useEffect(() => {
     if (step === "waiting" || step === "game" || step === "result") {
@@ -474,15 +489,15 @@ return (
   <div className="app-container">
     <div className="max-width-container">
       <div className="center-column">
-        {/* 时间和用户信息显示 */}
         <div className="info-header">
-          <div className="time-display">
-            Current Date and Time (UTC): {currentTime}
-          </div>
-          <div className="user-display">
-            Current User's Login: {currentUser}
-          </div>
-        </div>
+  <div className="time-display">
+    Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): {currentTime}
+  </div>
+  <div className="user-display">
+    Current User's Login: {currentUser}
+  </div>
+</div>
+      
 
         {error && (
           <div className="error">
