@@ -207,7 +207,6 @@ export default function App() {
       setLoading(false);
     }
   }, [name, roomCode, db, validateRoomCode]);
-
   // 🔄 开始下一轮
   const nextRound = useCallback(async () => {
     try {
@@ -253,7 +252,7 @@ export default function App() {
     setOpponentHealth(5);
   }, [roomCode, db]);
 
-// 👀 监听房间状态和对手
+  // 👀 监听房间状态和对手
   useEffect(() => {
     if (step === "waiting" || step === "game" || step === "result") {
       const roomRef = ref(db, `rooms/${roomCode}`);
@@ -340,30 +339,30 @@ export default function App() {
   }, [step, gameStarted, gameCountdown, hasConfirmed, choice, handleConfirm]);
 
   // ⏳ 结果展示倒计时
-useEffect(() => {
-  let timer;
-  if (step === "result") {
-    if (resultCountdown > 0) {
-      timer = setInterval(() => {
-        setResultCountdown(prev => prev - 1);
-      }, 1000);
-    } else if (resultStep < 5) {
-      timer = setTimeout(() => {
-        setResultStep(prev => {
-          if (prev < 5) {
-            startShaking();
-            return prev + 1;
-          }
-          return prev;
-        });
-      }, 1000);
+  useEffect(() => {
+    let timer;
+    if (step === "result") {
+      if (resultCountdown > 0) {
+        timer = setInterval(() => {
+          setResultCountdown(prev => prev - 1);
+        }, 1000);
+      } else if (resultStep < 5) {
+        timer = setTimeout(() => {
+          setResultStep(prev => {
+            if (prev < 5) {
+              startShaking();
+              return prev + 1;
+            }
+            return prev;
+          });
+        }, 1000);
+      }
     }
-  }
-  return () => {
-    clearInterval(timer);
-    clearTimeout(timer);
-  };
-}, [step, resultCountdown, resultStep, startShaking]);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(timer);
+    };
+  }, [step, resultCountdown, resultStep, startShaking]);
 
   // 🎮 检查游戏结束并更新生命值
   useEffect(() => {
