@@ -104,7 +104,8 @@ export default function App() {
       return "You Lose This Round!";
     }
   }, [choice, opponentChoice, playerHealth, opponentHealth]);
-  // 🎮 选择动作
+
+// 🎮 选择动作
   const handleChoiceSelection = useCallback((selectedChoice) => {
     if (!hasConfirmed) {
       setChoice(selectedChoice);
@@ -280,7 +281,8 @@ export default function App() {
     setPlayerHealth(5);
     setOpponentHealth(5);
   }, [roomCode, db]);
-  // 👀 监听房间状态和对手
+
+// 👀 监听房间状态和对手
   useEffect(() => {
     if (step === "waiting" || step === "game" || step === "result") {
       const roomRef = ref(db, `rooms/${roomCode}`);
@@ -464,6 +466,11 @@ export default function App() {
             <div className="center-column">
               <h1 className="title">Waiting for opponent...</h1>
               <p className="room-code">Room Code: {roomCode}</p>
+              <div className="health-display">
+                <div className="health-bar">
+                  <span className="health-label">Your Health: ({playerHealth}/5)</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -473,31 +480,11 @@ export default function App() {
               
               <div className="health-display">
                 <div className="health-bar">
-                  <span className="health-label">Your Health:</span>
-                  <div className="health-points">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <span
-                        key={i}
-                        className={`health-point ${i < playerHealth ? 'active' : ''}`}
-                      >
-                        ❤️
-                      </span>
-                    ))}
-                  </div>
+                  <span className="health-label">Your Health: ({playerHealth}/5)</span>
                 </div>
                 
                 <div className="health-bar">
-                  <span className="health-label">{opponentName}'s Health:</span>
-                  <div className="health-points">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <span
-                        key={i}
-                        className={`health-point ${i < opponentHealth ? 'active' : ''}`}
-                      >
-                        ❤️
-                      </span>
-                    ))}
-                  </div>
+                  <span className="health-label">{opponentName}'s Health: ({opponentHealth}/5)</span>
                 </div>
               </div>
 
