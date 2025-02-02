@@ -59,6 +59,28 @@ export default function App() {
     setTimeout(() => setIsShaking(false), 500);
   }, []);
 
+  // 🎮 更新游戏状态到 Firebase
+  const updateGameState = useCallback(async (newPlayerHealth, newOpponentHealth) => {
+    try {
+      const updates = {};
+      if (isPlayerA) {
+        updates[`rooms/${roomCode}/playerAHealth`] = newPlayerHealth;
+        updates[`rooms/${roomCode}/playerBHealth`] = newOpponentHealth;
+      } else {
+        updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
+        updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
+      }
+      
+      if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
+        updates[`rooms/${roomCode}/status`] = "gameover";
+      }
+      
+      await update(ref(db), updates);
+    } catch (err) {
+      setError("Failed to update game state: " + err.message);
+    }
+  }, [roomCode, isPlayerA, db]);
+
   // 🎮 获取游戏结果
   const getResult = useCallback(() => {
     if (!opponentChoice) return "Waiting...";
@@ -82,8 +104,7 @@ export default function App() {
       return "You Lose This Round!";
     }
   }, [choice, opponentChoice, playerHealth, opponentHealth]);
-
-// 🎮 选择动作
+  // 🎮 选择动作
   const handleChoiceSelection = useCallback((selectedChoice) => {
     if (!hasConfirmed) {
       setChoice(selectedChoice);
@@ -259,10 +280,9 @@ export default function App() {
     setPlayerHealth(5);
     setOpponentHealth(5);
   }, [roomCode, db]);
-
-// 👀 监听房间状态和对手
+  // 👀 监听房间状态和对手
   useEffect(() => {
-    if (step === "waiting" || step === "game") {
+    if (step === "waiting" || step === "game" || step === "result") {
       const roomRef = ref(db, `rooms/${roomCode}`);
       const unsubscribe = onValue(roomRef, (snapshot) => {
         const data = snapshot.val();
@@ -274,18 +294,20 @@ export default function App() {
           setGameCountdown(30);
         }
 
+        // 更新生命值
+        if (isPlayerA) {
+          setPlayerHealth(data.playerAHealth || 5);
+          setOpponentHealth(data.playerBHealth || 5);
+        } else {
+          setPlayerHealth(data.playerBHealth || 5);
+          setOpponentHealth(data.playerAHealth || 5);
+        }
+
         const opponentKey = isPlayerA ? "playerB" : "playerA";
         if (data[opponentKey]?.confirmed) {
           setOpponentConfirmed(true);
           setOpponentChoice(data[opponentKey].choice);
           setOpponentMessage(data[opponentKey].message || "");
-        }
-
-        // 更新对手生命值
-        if (isPlayerA) {
-          setOpponentHealth(data.playerBHealth || 5);
-        } else {
-          setOpponentHealth(data.playerAHealth || 5);
         }
       });
 
@@ -338,39 +360,46 @@ export default function App() {
     };
   }, [step, resultCountdown, resultStep, startShaking]);
 
-  // 🎮 检查游戏是否结束并更新生命值
+  // 🎮 检查游戏结束并更新生命值
   useEffect(() => {
-    if (step === "game" && (hasConfirmed && opponentConfirmed || gameCountdown === 0)) {
+    const updateHealthAndGameState = async (isGameWin) => {
       let newPlayerHealth = playerHealth;
       let newOpponentHealth = opponentHealth;
 
-      if (choice && opponentChoice) {
-        if (choice !== opponentChoice) { // 不是平局时才更新生命值
-          const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
-                       (choice === "Paper" && opponentChoice === "Rock") ||
-                       (choice === "Scissors" && opponentChoice === "Paper");
-          
-          if (isWin) {
-            newOpponentHealth -= 1;
-          } else {
-            newPlayerHealth -= 1;
-          }
-          
-          setPlayerHealth(newPlayerHealth);
-          setOpponentHealth(newOpponentHealth);
-          
-          // 更新Firebase中的生命值
-          const updates = {
-            [`rooms/${roomCode}/playerAHealth`]: isPlayerA ? newPlayerHealth : newOpponentHealth,
-            [`rooms/${roomCode}/playerBHealth`]: isPlayerA ? newOpponentHealth : newPlayerHealth
-          };
-          
-          if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-            updates[`rooms/${roomCode}/status`] = "gameover";
-          }
-          
-          update(ref(db), updates);
-        }
+      if (isGameWin) {
+        newOpponentHealth -= 1;
+      } else {
+        newPlayerHealth -= 1;
+      }
+
+      // 更新 Firebase
+      const updates = {};
+      if (isPlayerA) {
+        updates[`rooms/${roomCode}/playerAHealth`] = newPlayerHealth;
+        updates[`rooms/${roomCode}/playerBHealth`] = newOpponentHealth;
+      } else {
+        updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
+        updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
+      }
+
+      if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
+        updates[`rooms/${roomCode}/status`] = "gameover";
+      }
+
+      await update(ref(db), updates);
+      
+      // 更新本地状态
+      setPlayerHealth(newPlayerHealth);
+      setOpponentHealth(newOpponentHealth);
+    };
+
+    if (step === "game" && (hasConfirmed && opponentConfirmed || gameCountdown === 0)) {
+      if (choice && opponentChoice && choice !== opponentChoice) {
+        const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
+                     (choice === "Paper" && opponentChoice === "Rock") ||
+                     (choice === "Scissors" && opponentChoice === "Paper");
+        
+        updateHealthAndGameState(isWin);
       }
 
       setGameStarted(true);
