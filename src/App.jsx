@@ -59,24 +59,6 @@ export default function App() {
     setTimeout(() => setIsShaking(false), 500);
   }, []);
 
-  // 🎮 更新游戏状态到 Firebase
-  const updateGameState = useCallback(async (newPlayerHealth, newOpponentHealth) => {
-    try {
-      const updates = {
-        [`rooms/${roomCode}/playerAHealth`]: isPlayerA ? newPlayerHealth : newOpponentHealth,
-        [`rooms/${roomCode}/playerBHealth`]: isPlayerA ? newOpponentHealth : newPlayerHealth,
-      };
-      
-      if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-        updates[`rooms/${roomCode}/status`] = "gameover";
-      }
-      
-      await update(ref(db), updates);
-    } catch (err) {
-      setError("Failed to update game state: " + err.message);
-    }
-  }, [roomCode, isPlayerA, db]);
-
   // 🎮 获取游戏结果
   const getResult = useCallback(() => {
     if (!opponentChoice) return "Waiting...";
@@ -212,6 +194,40 @@ export default function App() {
     }
   }, [name, roomCode, db, validateRoomCode]);
 
+  // 🔄 开始下一轮
+  const nextRound = useCallback(async () => {
+    try {
+      // 只重置游戏相关状态,保持房间和玩家信息
+      setChoice("");
+      setMessage("");
+      setHasConfirmed(false);
+      setOpponentChoice(null);
+      setOpponentMessage("");
+      setOpponentConfirmed(false);
+      setGameCountdown(30);
+      setResultCountdown(3);
+      setResultStep(0);
+      setIsShaking(false);
+      setGameStarted(false);
+      
+      // 更新房间状态
+      const updates = {
+        [`rooms/${roomCode}/playerA/confirmed`]: false,
+        [`rooms/${roomCode}/playerA/choice`]: null,
+        [`rooms/${roomCode}/playerA/message`]: "",
+        [`rooms/${roomCode}/playerB/confirmed`]: false,
+        [`rooms/${roomCode}/playerB/choice`]: null,
+        [`rooms/${roomCode}/playerB/message`]: "",
+        [`rooms/${roomCode}/status`]: "playing"
+      };
+      
+      await update(ref(db), updates);
+      setStep("game");
+    } catch (err) {
+      setError("Failed to start next round: " + err.message);
+    }
+  }, [roomCode, db]);
+
   // 🔄 重置游戏并清除房间数据
   const resetGame = useCallback(async () => {
     try {
@@ -222,6 +238,7 @@ export default function App() {
       console.error("Failed to cleanup room:", err);
     }
 
+    // 完全重置所有状态
     setStep("login");
     setName("");
     setRoomCode("");
@@ -243,7 +260,7 @@ export default function App() {
     setOpponentHealth(5);
   }, [roomCode, db]);
 
-  // 👀 监听房间状态和对手
+// 👀 监听房间状态和对手
   useEffect(() => {
     if (step === "waiting" || step === "game") {
       const roomRef = ref(db, `rooms/${roomCode}`);
@@ -295,7 +312,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, [step, gameStarted, gameCountdown, hasConfirmed, choice, handleConfirm]);
 
-// ⏳ 结果展示倒计时
+  // ⏳ 结果展示倒计时
   useEffect(() => {
     let timer;
     if (step === "result") {
@@ -328,7 +345,7 @@ export default function App() {
       let newOpponentHealth = opponentHealth;
 
       if (choice && opponentChoice) {
-        if (choice !== opponentChoice) {
+        if (choice !== opponentChoice) { // 不是平局时才更新生命值
           const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
                        (choice === "Paper" && opponentChoice === "Rock") ||
                        (choice === "Scissors" && opponentChoice === "Paper");
@@ -341,7 +358,18 @@ export default function App() {
           
           setPlayerHealth(newPlayerHealth);
           setOpponentHealth(newOpponentHealth);
-          updateGameState(newPlayerHealth, newOpponentHealth);
+          
+          // 更新Firebase中的生命值
+          const updates = {
+            [`rooms/${roomCode}/playerAHealth`]: isPlayerA ? newPlayerHealth : newOpponentHealth,
+            [`rooms/${roomCode}/playerBHealth`]: isPlayerA ? newOpponentHealth : newPlayerHealth
+          };
+          
+          if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
+            updates[`rooms/${roomCode}/status`] = "gameover";
+          }
+          
+          update(ref(db), updates);
         }
       }
 
@@ -350,7 +378,7 @@ export default function App() {
       setResultStep(0);
     }
   }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, 
-      playerHealth, opponentHealth, updateGameState]);
+      playerHealth, opponentHealth, roomCode, isPlayerA, db]);
 
   return (
     <div className="app-container">
@@ -414,7 +442,6 @@ export default function App() {
             <div className="center-column">
               <h1 className="title">Make Your Move</h1>
               
-              {/* 生命值显示 */}
               <div className="health-display">
                 <div className="health-bar">
                   <span className="health-label">Your Health:</span>
@@ -557,12 +584,21 @@ export default function App() {
                           )}
                         </>
                       )}
-                      <button 
-                        onClick={resetGame}
-                        className="button button-blue"
-                      >
-                        {playerHealth <= 0 || opponentHealth <= 0 ? 'Start New Game' : 'Next Round'}
-                      </button>
+                      {playerHealth <= 0 || opponentHealth <= 0 ? (
+                        <button 
+                          onClick={resetGame}
+                          className="button button-blue"
+                        >
+                          Start New Game
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={nextRound}
+                          className="button button-green"
+                        >
+                          Next Round
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
