@@ -46,6 +46,9 @@ export default function App() {
   const [playerHealth, setPlayerHealth] = useState(5);
   const [opponentHealth, setOpponentHealth] = useState(5);
 
+  // Add new state for tracking final animation
+  const [finalAnimationComplete, setFinalAnimationComplete] = useState(false);
+
   const choices = ["Rock", "Paper", "Scissors"];
 
   // 🔍 验证房间代码
@@ -251,6 +254,7 @@ export default function App() {
     setError("");
     setPlayerHealth(5);
     setOpponentHealth(5);
+    setFinalAnimationComplete(false);
   }, [roomCode, db]);
 
 // 👀 监听房间状态和对手
@@ -271,25 +275,9 @@ export default function App() {
         if (isPlayerA) {
           setPlayerHealth(data.playerAHealth || 5);
           setOpponentHealth(data.playerBHealth || 5);
-          if (data.playerAHealth <= 0 || data.playerBHealth <= 0) {
-            setStep("gameover");
-            if (data.playerBHealth <= 0) {
-              updates[`rooms/${roomCode}/winner`] = "playerA";
-            } else {
-              updates[`rooms/${roomCode}/winner`] = "playerB";
-            }
-          }
         } else {
           setPlayerHealth(data.playerBHealth || 5);
           setOpponentHealth(data.playerAHealth || 5);
-          if (data.playerAHealth <= 0 || data.playerBHealth <= 0) {
-            setStep("gameover");
-            if (data.playerAHealth <= 0) {
-              updates[`rooms/${roomCode}/winner`] = "playerB";
-            } else {
-              updates[`rooms/${roomCode}/winner`] = "playerA";
-            }
-          }
         }
 
         const opponentKey = isPlayerA ? "playerB" : "playerA";
@@ -429,6 +417,16 @@ export default function App() {
     }
   }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, 
       playerHealth, opponentHealth, roomCode, isPlayerA, db]);
+
+  // Update useEffect for final animation
+  useEffect(() => {
+    if (step === "result" && resultStep >= 4 && (playerHealth <= 0 || opponentHealth <= 0)) {
+      const timer = setTimeout(() => {
+        setFinalAnimationComplete(true);
+      }, 2000); // Wait 2 seconds after showing "The Game is Done!"
+      return () => clearTimeout(timer);
+    }
+  }, [step, resultStep, playerHealth, opponentHealth]);
 
   return (
     <div className="app-container">
@@ -619,13 +617,26 @@ export default function App() {
                           )}
                         </>
                       )}
-                      {playerHealth <= 0 || opponentHealth <= 0 ? (
-                        <button 
-                          onClick={resetGame}
-                          className="button button-blue"
-                        >
-                          Start New Game
-                        </button>
+                      {(playerHealth <= 0 || opponentHealth <= 0) ? (
+                        <>
+                          {!finalAnimationComplete ? (
+                            <p className="fade-in">The Game is Done!</p>
+                          ) : (
+                            <>
+                              <div className="final-health-display fade-in">
+                                <p>Final Health Status:</p>
+                                <p>You: {playerHealth}/5</p>
+                                <p>{opponentName}: {opponentHealth}/5</p>
+                              </div>
+                              <button 
+                                onClick={resetGame}
+                                className="button button-blue fade-in"
+                              >
+                                Start New Game
+                              </button>
+                            </>
+                          )}
+                        </>
                       ) : (
                         <button 
                           onClick={nextRound}
@@ -645,7 +656,7 @@ export default function App() {
             <div className="center-column">
               <h1 className="title">Game Over</h1>
               <p className="result-text">
-                Winner: {data?.winner || "Unknown"}
+                {playerHealth <= 0 ? "You Lost!" : "You Won!"}
               </p>
               <button 
                 onClick={resetGame}
