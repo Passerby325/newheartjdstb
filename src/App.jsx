@@ -42,6 +42,10 @@ export default function App() {
   const [isShaking, setIsShaking] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
 
+  // 生命值相关状态
+  const [playerHealth, setPlayerHealth] = useState(5);
+  const [opponentHealth, setOpponentHealth] = useState(5);
+
   const choices = ["Rock", "Paper", "Scissors"];
 
   // 🔍 验证房间代码
@@ -68,12 +72,15 @@ export default function App() {
       await remove(roomRef); // 清除旧房间数据
       await update(roomRef, {
         playerA: name,
+        playerAHealth: 5,
         createdAt: new Date().toISOString(),
         status: "waiting"
       });
       
       setIsPlayerA(true);
       setStep("waiting");
+      setPlayerHealth(5);
+      setOpponentHealth(5);
     } catch (err) {
       setError("Failed to create room: " + err.message);
     } finally {
@@ -112,6 +119,7 @@ export default function App() {
 
       await update(roomRef, {
         playerB: name,
+        playerBHealth: 5,
         joinedAt: new Date().toISOString(),
         status: "playing"
       });
@@ -120,6 +128,8 @@ export default function App() {
       setOpponentName(roomData.playerA);
       setStep("game");
       setGameCountdown(30);
+      setPlayerHealth(5);
+      setOpponentHealth(5);
     } catch (err) {
       setError("Failed to join room: " + err.message);
     } finally {
@@ -130,9 +140,10 @@ export default function App() {
   // 震动动画效果
   const startShaking = () => {
     setIsShaking(true);
-    setTimeout(() => setIsShaking(false), 500); // 0.5秒后停止震动
+    setTimeout(() => setIsShaking(false), 500);
   };
-  // 🎮 选择动作
+
+// 🎮 选择动作
 const handleChoiceSelection = (selectedChoice) => {
   if (!hasConfirmed) {
     setChoice(selectedChoice);
@@ -163,14 +174,45 @@ const handleConfirm = async () => {
 const getResult = () => {
   if (!opponentChoice) return "Waiting...";
   if (choice === opponentChoice) return "It's a tie!";
-  if (
-    (choice === "Rock" && opponentChoice === "Scissors") ||
-    (choice === "Paper" && opponentChoice === "Rock") ||
-    (choice === "Scissors" && opponentChoice === "Paper")
-  ) {
-    return "You Win!";
+  
+  const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
+                (choice === "Paper" && opponentChoice === "Rock") ||
+                (choice === "Scissors" && opponentChoice === "Paper");
+  
+  // 更新生命值
+  if (isWin) {
+    const newOpponentHealth = opponentHealth - 1;
+    setOpponentHealth(newOpponentHealth);
+    if (newOpponentHealth <= 0) {
+      return "You've Won The Game!";
+    }
+    return "You Win This Round!";
+  } else {
+    const newPlayerHealth = playerHealth - 1;
+    setPlayerHealth(newPlayerHealth);
+    if (newPlayerHealth <= 0) {
+      return "Game Over - You Lost!";
+    }
+    return "You Lose This Round!";
   }
-  return "You Lose!";
+};
+
+// 更新游戏状态到 Firebase
+const updateGameState = async () => {
+  try {
+    const updates = {
+      [`rooms/${roomCode}/playerAHealth`]: isPlayerA ? playerHealth : opponentHealth,
+      [`rooms/${roomCode}/playerBHealth`]: isPlayerA ? opponentHealth : playerHealth,
+    };
+    
+    if (playerHealth <= 0 || opponentHealth <= 0) {
+      updates[`rooms/${roomCode}/status`] = "gameover";
+    }
+    
+    await update(ref(db), updates);
+  } catch (err) {
+    setError("Failed to update game state: " + err.message);
+  }
 };
 
 // 🔄 重置游戏并清除房间数据
@@ -200,6 +242,8 @@ const resetGame = async () => {
   setGameStarted(false);
   setIsPlayerA(false);
   setError("");
+  setPlayerHealth(5);
+  setOpponentHealth(5);
 };
 
 // 👀 监听房间状态和对手
@@ -221,6 +265,13 @@ useEffect(() => {
         setOpponentConfirmed(true);
         setOpponentChoice(data[opponentKey].choice);
         setOpponentMessage(data[opponentKey].message || "");
+      }
+
+      // 更新对手生命值
+      if (isPlayerA) {
+        setOpponentHealth(data.playerBHealth || 5);
+      } else {
+        setOpponentHealth(data.playerAHealth || 5);
       }
     });
 
@@ -253,6 +304,7 @@ useEffect(() => {
     setGameStarted(true);
     setStep("result");
     setResultStep(0);
+    updateGameState();
   }
 }, [hasConfirmed, opponentConfirmed, gameCountdown, step]);
 
@@ -343,6 +395,38 @@ return (
         {step === "game" && (
           <div className="center-column">
             <h1 className="title">Make Your Move</h1>
+            
+            {/* 生命值显示 */}
+            <div className="health-display">
+              <div className="health-bar">
+                <span className="health-label">Your Health:</span>
+                <div className="health-points">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`health-point ${i < playerHealth ? 'active' : ''}`}
+                    >
+                      ❤️
+                    </span>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="health-bar">
+                <span className="health-label">{opponentName}'s Health:</span>
+                <div className="health-points">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`health-point ${i < opponentHealth ? 'active' : ''}`}
+                    >
+                      ❤️
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             <p className="subtitle">
               Your message will only be shown if you win or tie the game.
             </p>
@@ -440,7 +524,7 @@ return (
                       </>
                     ) : (
                       <>
-                        {getResult() === "You Win!" ? (
+                        {getResult().includes("Win") ? (
                           message && (
                             <p className="message fade-in">
                               "{message}" - by <strong>You</strong>
