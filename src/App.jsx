@@ -153,8 +153,7 @@ export default function App() {
         playerA: name,
         playerAHealth: 5,
         createdAt: new Date().toISOString(),
-        status: "waiting",
-        lastUpdateTime: new Date().toISOString()
+        status: "waiting"
       });
       
       setIsPlayerA(true);
@@ -201,8 +200,7 @@ export default function App() {
         playerB: name,
         playerBHealth: 5,
         joinedAt: new Date().toISOString(),
-        status: "playing",
-        lastUpdateTime: new Date().toISOString()
+        status: "playing"
       });
 
       setIsPlayerA(false);
@@ -218,7 +216,41 @@ export default function App() {
     }
   }, [name, roomCode, db, validateRoomCode]);
 
-  // 🔄 开始下一轮 - 移除此功能，改为直接重置游戏
+  // 🔄 开始下一轮
+  const nextRound = useCallback(async () => {
+    try {
+      // 只重置游戏相关状态,保持房间和玩家信息
+      setChoice("");
+      setMessage("");
+      setHasConfirmed(false);
+      setOpponentChoice(null);
+      setOpponentMessage("");
+      setOpponentConfirmed(false);
+      setGameCountdown(30);
+      setResultCountdown(3);
+      setResultStep(0);
+      setIsShaking(false);
+      setGameStarted(false);
+      
+      // 更新房间状态
+      const updates = {
+        [`rooms/${roomCode}/playerA/confirmed`]: false,
+        [`rooms/${roomCode}/playerA/choice`]: null,
+        [`rooms/${roomCode}/playerA/message`]: "",
+        [`rooms/${roomCode}/playerB/confirmed`]: false,
+        [`rooms/${roomCode}/playerB/choice`]: null,
+        [`rooms/${roomCode}/playerB/message`]: "",
+        [`rooms/${roomCode}/status`]: "playing"
+      };
+      
+      await update(ref(db), updates);
+      setStep("game");
+    } catch (err) {
+      setError("Failed to start next round: " + err.message);
+    }
+  }, [roomCode, db]);
+
+  // 🔄 重置游戏并清除房间数据
   const resetGame = useCallback(async () => {
     try {
       if (roomCode) {
@@ -258,25 +290,10 @@ export default function App() {
         const data = snapshot.val();
         if (!data) return;
 
-        // 检查房间是否已过期（5分钟无更新）
-        const now = new Date();
-        const lastUpdate = new Date(data.lastUpdateTime || data.createdAt);
-        const timeDiff = now - lastUpdate;
-        if (timeDiff > 5 * 60 * 1000) {
-          resetGame();
-          return;
-        }
-
         if (step === "waiting" && data.status === "playing") {
           setOpponentName(data.playerB);
           setStep("game");
           setGameCountdown(30);
-        }
-
-        // 检查游戏是否结束
-        if (data.status === "gameover") {
-          setStep("result");
-          setResultStep(4); // 直接跳到最终结果
         }
 
         // 更新生命值
@@ -298,7 +315,7 @@ export default function App() {
 
       return () => unsubscribe();
     }
-  }, [step, roomCode, isPlayerA, resetGame]);
+  }, [step, roomCode, isPlayerA, db]);
 
   // ⏳ 游戏选择倒计时
   useEffect(() => {
@@ -352,9 +369,9 @@ export default function App() {
       let newOpponentHealth = opponentHealth;
 
       if (isGameWin) {
-        newOpponentHealth = Math.max(0, opponentHealth - 1);
+        newOpponentHealth -= 1;
       } else {
-        newPlayerHealth = Math.max(0, playerHealth - 1);
+        newPlayerHealth -= 1;
       }
 
       // 更新 Firebase
@@ -367,10 +384,6 @@ export default function App() {
         updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
       }
 
-      // 更新最后活动时间
-      updates[`rooms/${roomCode}/lastUpdateTime`] = new Date().toISOString();
-
-      // 检查是否游戏结束
       if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
         updates[`rooms/${roomCode}/status`] = "gameover";
       }
@@ -380,13 +393,6 @@ export default function App() {
       // 更新本地状态
       setPlayerHealth(newPlayerHealth);
       setOpponentHealth(newOpponentHealth);
-
-      // 如果任何一方生命值为0，直接结束游戏
-      if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-        setGameStarted(true);
-        setStep("result");
-        setResultStep(4); // 直接显示最终结果
-      }
     };
 
     if (step === "game" && (hasConfirmed && opponentConfirmed || gameCountdown === 0)) {
@@ -403,7 +409,7 @@ export default function App() {
       setResultStep(0);
     }
   }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, 
-      playerHealth, opponentHealth, roomCode, isPlayerA]);
+      playerHealth, opponentHealth, roomCode, isPlayerA, db]);
 
   return (
     <div className="app-container">
@@ -536,15 +542,6 @@ export default function App() {
 
           {step === "result" && (
             <div className="center-column">
-              <div className="health-display">
-                <div className="health-bar">
-                  <span className="health-label">Your Health: ({playerHealth}/5)</span>
-                </div>
-                <div className="health-bar">
-                  <span className="health-label">{opponentName}'s Health: ({opponentHealth}/5)</span>
-                </div>
-              </div>
-
               {resultCountdown > 0 ? (
                 <h1 className="title">
                   Revealing in {resultCountdown}...
@@ -603,12 +600,21 @@ export default function App() {
                           )}
                         </>
                       )}
-                      <button 
-                        onClick={resetGame}
-                        className="button button-blue"
-                      >
-                        Start New Game
-                      </button>
+                      {playerHealth <= 0 || opponentHealth <= 0 ? (
+                        <button 
+                          onClick={resetGame}
+                          className="button button-blue"
+                        >
+                          Start New Game
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={nextRound}
+                          className="button button-green"
+                        >
+                          Next Round
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
