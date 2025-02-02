@@ -91,19 +91,11 @@ export default function App() {
                   (choice === "Scissors" && opponentChoice === "Paper");
     
     if (isWin) {
-      const newOpponentHealth = opponentHealth - 1;
-      if (newOpponentHealth <= 0) {
-        return "You've Won The Game!";
-      }
       return "You Win This Round!";
     } else {
-      const newPlayerHealth = playerHealth - 1;
-      if (newPlayerHealth <= 0) {
-        return "Game Over - You Lost!";
-      }
       return "You Lose This Round!";
     }
-  }, [choice, opponentChoice, playerHealth, opponentHealth]);
+  }, [choice, opponentChoice]);
 
 // 🎮 选择动作
   const handleChoiceSelection = useCallback((selectedChoice) => {
