@@ -291,7 +291,9 @@ export default function App() {
           setOpponentMessage(data[opponentKey].message || "");
         }
 
-        if (data.playerA?.nextRound && data.playerB?.nextRound) {
+        if (data.playerAHealth <= 0 || data.playerBHealth <= 0) {
+          setStep("gameover");
+        } else if (data.playerA?.nextRound && data.playerB?.nextRound) {
           // 重置游戏相关状态
           setChoice("");
           setMessage("");
@@ -628,6 +630,21 @@ export default function App() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {step === "gameover" && (
+            <div className="center-column">
+              <h1 className="title">Game Over</h1>
+              <p className="result-text">
+                {playerHealth <= 0 ? "You Lost!" : "You Won!"}
+              </p>
+              <button 
+                onClick={resetGame}
+                className="button button-blue"
+              >
+                Start New Game
+              </button>
             </div>
           )}
         </div>
