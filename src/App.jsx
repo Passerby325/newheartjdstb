@@ -46,9 +46,6 @@ export default function App() {
   const [playerHealth, setPlayerHealth] = useState(5);
   const [opponentHealth, setOpponentHealth] = useState(5);
 
-  // Add new state for tracking final animation
-  const [finalAnimationComplete, setFinalAnimationComplete] = useState(false);
-
   const choices = ["Rock", "Paper", "Scissors"];
 
   // 🔍 验证房间代码
@@ -254,7 +251,6 @@ export default function App() {
     setError("");
     setPlayerHealth(5);
     setOpponentHealth(5);
-    setFinalAnimationComplete(false);
   }, [roomCode, db]);
 
 // 👀 监听房间状态和对手
@@ -287,11 +283,8 @@ export default function App() {
           setOpponentMessage(data[opponentKey].message || "");
         }
 
-        // Move the game over check to after result animation
         if (data.playerAHealth <= 0 || data.playerBHealth <= 0) {
-          if (finalAnimationComplete) {
-            setStep("gameover");
-          }
+          setStep("gameover");
         } else if (data.playerA?.nextRound && data.playerB?.nextRound) {
           // 重置游戏相关状态
           setChoice("");
@@ -325,7 +318,7 @@ export default function App() {
 
       return () => unsubscribe();
     }
-  }, [step, roomCode, isPlayerA, db, finalAnimationComplete]);
+  }, [step, roomCode, isPlayerA, db]);
 
   // ⏳ 游戏选择倒计时
   useEffect(() => {
@@ -347,30 +340,30 @@ export default function App() {
   }, [step, gameStarted, gameCountdown, hasConfirmed, choice, handleConfirm]);
 
   // ⏳ 结果展示倒计时
-  useEffect(() => {
-    let timer;
-    if (step === "result") {
-      if (resultCountdown > 0) {
-        timer = setInterval(() => {
-          setResultCountdown(prev => prev - 1);
-        }, 1000);
-      } else if (resultStep < 4) {
-        timer = setTimeout(() => {
-          setResultStep(prev => {
-            if (prev < 4) {
-              startShaking();
-              return prev + 1;
-            }
-            return prev;
-          });
-        }, 1000);
-      }
+useEffect(() => {
+  let timer;
+  if (step === "result") {
+    if (resultCountdown > 0) {
+      timer = setInterval(() => {
+        setResultCountdown(prev => prev - 1);
+      }, 1000);
+    } else if (resultStep < 5) {
+      timer = setTimeout(() => {
+        setResultStep(prev => {
+          if (prev < 5) {
+            startShaking();
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 1000);
     }
-    return () => {
-      clearInterval(timer);
-      clearTimeout(timer);
-    };
-  }, [step, resultCountdown, resultStep, startShaking]);
+  }
+  return () => {
+    clearInterval(timer);
+    clearTimeout(timer);
+  };
+}, [step, resultCountdown, resultStep, startShaking]);
 
   // 🎮 检查游戏结束并更新生命值
   useEffect(() => {
@@ -420,16 +413,6 @@ export default function App() {
     }
   }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, 
       playerHealth, opponentHealth, roomCode, isPlayerA, db]);
-
-  // Update useEffect for final animation
-  useEffect(() => {
-    if (step === "result" && resultStep >= 4 && (playerHealth <= 0 || opponentHealth <= 0)) {
-      const timer = setTimeout(() => {
-        setFinalAnimationComplete(true);
-      }, 2000); // Wait 2 seconds after showing "The Game is Done!"
-      return () => clearTimeout(timer);
-    }
-  }, [step, resultStep, playerHealth, opponentHealth]);
 
   return (
     <div className="app-container">
@@ -560,63 +543,92 @@ export default function App() {
             </div>
           )}
 
-          {step === "result" && (
-            <div className="center-column">
-              {resultCountdown > 0 ? (
-                <h1 className="title">
-                  Revealing in {resultCountdown}...
-                </h1>
-              ) : (
-                <div className={`result-container ${isShaking ? 'shake' : ''}`}>
-                  <h2 className="result-title">Results:</h2>
-                  
-                  {resultStep >= 1 && (
-                    <p className="fade-in">
-                      <strong>You</strong> chose: {choice}
+        {step === "result" && (
+  <div className="center-column">
+    {resultCountdown > 0 ? (
+      <h1 className="title">
+        Revealing in {resultCountdown}...
+      </h1>
+    ) : (
+      <div className={`result-container ${isShaking ? 'shake' : ''}`}>
+        <h2 className="result-title">Results:</h2>
+        
+        {resultStep >= 1 && (
+          <p className="fade-in">
+            <strong>You</strong> chose: {choice}
+          </p>
+        )}
+        
+        {resultStep >= 2 && (
+          <p className="fade-in">
+            <strong>{opponentName}</strong> chose: {opponentChoice}
+          </p>
+        )}
+        
+        {resultStep >= 3 && (
+          <>
+            {getResult() === "It's a tie!" ? (
+              <>
+                {message && (
+                  <p className="message fade-in">
+                    "{message}" - by <strong>You</strong>
+                  </p>
+                )}
+                {opponentMessage && (
+                  <p className="message fade-in">
+                    "{opponentMessage}" - by <strong>{opponentName}</strong>
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                {getResult().includes("Win") ? (
+                  message && (
+                    <p className="message fade-in">
+                      "{message}" - by <strong>You</strong>
                     </p>
-                  )}
-                  
-                  {resultStep >= 2 && (
-                    <p className="fade-in">
-                      <strong>{opponentName}</strong> chose: {opponentChoice}
+                  )
+                ) : (
+                  opponentMessage && (
+                    <p className="message fade-in">
+                      "{opponentMessage}" - by <strong>{opponentName}</strong>
                     </p>
-                  )}
-                  
-                  {resultStep >= 3 && (
-                    <p className="result-text fade-in">
-                      {getResult()}
-                    </p>
-                  )}
-                  
-                  {resultStep >= 4 && (playerHealth <= 0 || opponentHealth <= 0) && (
-                    <>
-                      <p className="fade-in game-over-message">The Game is Done!</p>
-                      <div className="final-health-display fade-in">
-                        <p>Final Health Status:</p>
-                        <p>You: {playerHealth}/5</p>
-                        <p>{opponentName}: {opponentHealth}/5</p>
-                      </div>
-                      <button 
-                        onClick={resetGame}
-                        className="button button-blue fade-in"
-                      >
-                        Start New Game
-                      </button>
-                    </>
-                  )}
-                  
-                  {resultStep >= 4 && playerHealth > 0 && opponentHealth > 0 && (
-                    <button 
-                      onClick={nextRound}
-                      className="button button-green"
-                    >
-                      Next Round
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                  )
+                )}
+              </>
+            )}
+          </>
+        )}
+        
+        {resultStep >= 4 && (
+          <p className="result-text fade-in">
+            {getResult()}
+          </p>
+        )}
+        
+        {resultStep >= 5 && (
+          <>
+            {playerHealth <= 0 || opponentHealth <= 0 ? (
+              <button 
+                onClick={resetGame}
+                className="button button-blue"
+              >
+                Start New Game
+              </button>
+            ) : (
+              <button 
+                onClick={nextRound}
+                className="button button-green"
+              >
+                Next Round
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    )}
+  </div>
+)}
 
           {step === "gameover" && (
             <div className="center-column">
