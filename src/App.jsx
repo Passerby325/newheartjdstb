@@ -645,9 +645,7 @@ export default function App() {
             <div className="center-column">
               <h1 className="title">Game Over</h1>
               <p className="result-text">
-                {(isPlayerA && data?.winner === "playerA") || (!isPlayerA && data?.winner === "playerB") 
-                  ? "You Won!" 
-                  : "You Lost!"}
+                Winner: {data?.winner || "Unknown"}
               </p>
               <button 
                 onClick={resetGame}
