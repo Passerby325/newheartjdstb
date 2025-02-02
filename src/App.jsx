@@ -25,6 +25,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isPlayerA, setIsPlayerA] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
 
   // 游戏选择相关状态
   const [choice, setChoice] = useState("");
@@ -109,8 +110,7 @@ export default function App() {
       return "You Lose This Round!";
     }
   }, [choice, opponentChoice, playerHealth, opponentHealth]);
-
-// 🎮 选择动作
+  // 🎮 选择动作
   const handleChoiceSelection = useCallback((selectedChoice) => {
     if (!hasConfirmed) {
       setChoice(selectedChoice);
@@ -169,6 +169,7 @@ export default function App() {
       setStep("waiting");
       setPlayerHealth(5);
       setOpponentHealth(5);
+      setIsCalculating(false); // 重置计算状态
     } catch (err) {
       console.error("Failed to create room:", err);
       setError("Failed to create room: " + err.message);
@@ -222,6 +223,7 @@ export default function App() {
       setGameCountdown(30);
       setPlayerHealth(5);
       setOpponentHealth(5);
+      setIsCalculating(false); // 重置计算状态
     } catch (err) {
       console.error("Failed to join room:", err);
       setError("Failed to join room: " + err.message);
@@ -245,6 +247,7 @@ export default function App() {
       setResultStep(0);
       setIsShaking(false);
       setGameStarted(false);
+      setIsCalculating(false); // 重置计算状态
       
       // 更新房间状态
       const updates = {
@@ -297,9 +300,9 @@ export default function App() {
     setError("");
     setPlayerHealth(5);
     setOpponentHealth(5);
+    setIsCalculating(false); // 重置计算状态
   }, [roomCode, db]);
-
-// 👀 监听房间状态和对手
+  // 👀 监听房间状态和对手
   useEffect(() => {
     if (step === "waiting" || step === "game" || step === "result") {
       const roomRef = ref(db, `rooms/${roomCode}`);
@@ -314,19 +317,25 @@ export default function App() {
           setGameCountdown(30);
         }
 
-        // 同步生命值
-        const currentPlayerHealth = isPlayerA ? (data.playerAHealth ?? 5) : (data.playerBHealth ?? 5);
-        const currentOpponentHealth = isPlayerA ? (data.playerBHealth ?? 5) : (data.playerAHealth ?? 5);
-        
-        console.log("Room data updated:", {
-          isPlayerA,
-          currentPlayerHealth,
-          currentOpponentHealth,
-          data
-        });
+        // 只在非计算状态下更新生命值
+        if (!isCalculating) {
+          const currentPlayerHealth = Math.max(0, isPlayerA ? (data.playerAHealth ?? 5) : (data.playerBHealth ?? 5));
+          const currentOpponentHealth = Math.max(0, isPlayerA ? (data.playerBHealth ?? 5) : (data.playerAHealth ?? 5));
+          
+          console.log("Room data health sync:", {
+            isPlayerA,
+            currentPlayerHealth,
+            currentOpponentHealth
+          });
 
-        setPlayerHealth(currentPlayerHealth);
-        setOpponentHealth(currentOpponentHealth);
+          // 只在值真正改变时更新状态
+          if (currentPlayerHealth !== playerHealth) {
+            setPlayerHealth(currentPlayerHealth);
+          }
+          if (currentOpponentHealth !== opponentHealth) {
+            setOpponentHealth(currentOpponentHealth);
+          }
+        }
 
         // 更新对手信息
         const opponentKey = isPlayerA ? "playerB" : "playerA";
@@ -339,7 +348,7 @@ export default function App() {
 
       return () => unsubscribe();
     }
-  }, [step, roomCode, isPlayerA]);
+  }, [step, roomCode, isPlayerA, isCalculating, playerHealth, opponentHealth]);
 
   // ⏳ 游戏选择倒计时
   useEffect(() => {
@@ -389,61 +398,78 @@ export default function App() {
   // 🎮 检查游戏结束并更新生命值
   useEffect(() => {
     const updateGameResults = async () => {
-      if (!choice || !opponentChoice || choice === opponentChoice) {
-        setGameStarted(true);
-        setStep("result");
-        setResultStep(0);
-        return; // 平局不更新生命值
+      // 防止重复计算
+      if (isCalculating) {
+        console.log("Already calculating results, skipping...");
+        return;
       }
 
-      const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
-                   (choice === "Paper" && opponentChoice === "Rock") ||
-                   (choice === "Scissors" && opponentChoice === "Paper");
-
-      // 计算新的生命值
-      const newPlayerHealth = isWin ? playerHealth : playerHealth - 1;
-      const newOpponentHealth = isWin ? opponentHealth - 1 : opponentHealth;
-
-      console.log("Calculating game results:", {
-        isWin,
-        currentHealth: { player: playerHealth, opponent: opponentHealth },
-        newHealth: { player: newPlayerHealth, opponent: newOpponentHealth }
-      });
-
-      // 更新 Firebase
-      const updates = {};
-      if (isPlayerA) {
-        updates[`rooms/${roomCode}/playerAHealth`] = newPlayerHealth;
-        updates[`rooms/${roomCode}/playerBHealth`] = newOpponentHealth;
-      } else {
-        updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
-        updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
-      }
-
-      if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-        updates[`rooms/${roomCode}/status`] = "gameover";
-      }
+      // 开始计算前设置标志
+      setIsCalculating(true);
 
       try {
+        if (!choice || !opponentChoice || choice === opponentChoice) {
+          console.log("Tie game or no choices made");
+          setGameStarted(true);
+          setStep("result");
+          setResultStep(0);
+          setIsCalculating(false);
+          return; // 平局不更新生命值
+        }
+
+        const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
+                     (choice === "Paper" && opponentChoice === "Rock") ||
+                     (choice === "Scissors" && opponentChoice === "Paper");
+
+        // 只扣除一点生命值
+        const newPlayerHealth = isWin ? playerHealth : Math.max(0, playerHealth - 1);
+        const newOpponentHealth = isWin ? Math.max(0, opponentHealth - 1) : opponentHealth;
+
+        console.log("Single round result calculation:", {
+          isWin,
+          currentHealth: { player: playerHealth, opponent: opponentHealth },
+          newHealth: { player: newPlayerHealth, opponent: newOpponentHealth }
+        });
+
+        // 更新 Firebase
+        const updates = {};
+        if (isPlayerA) {
+          updates[`rooms/${roomCode}/playerAHealth`] = newPlayerHealth;
+          updates[`rooms/${roomCode}/playerBHealth`] = newOpponentHealth;
+        } else {
+          updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
+          updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
+        }
+
+        // 只在生命值为 0 时设置游戏结束
+        if (newPlayerHealth === 0 || newOpponentHealth === 0) {
+          updates[`rooms/${roomCode}/status`] = "gameover";
+        }
+
         await update(ref(db), updates);
         console.log("Firebase updated with new health values");
+        
+        // 更新本地状态
+        setPlayerHealth(newPlayerHealth);
+        setOpponentHealth(newOpponentHealth);
+
       } catch (err) {
         console.error("Failed to update game state:", err);
         setError("Failed to update game state: " + err.message);
+      } finally {
+        // 计算完成后重置标志
+        setIsCalculating(false);
+        setGameStarted(true);
+        setStep("result");
+        setResultStep(0);
       }
-
-      setPlayerHealth(newPlayerHealth);
-      setOpponentHealth(newOpponentHealth);
-      setGameStarted(true);
-      setStep("result");
-      setResultStep(0);
     };
 
     if (step === "game" && (hasConfirmed && opponentConfirmed || gameCountdown === 0)) {
       updateGameResults();
     }
   }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, 
-      playerHealth, opponentHealth, roomCode, isPlayerA, db]);
+      playerHealth, opponentHealth, roomCode, isPlayerA, isCalculating]);
 
   return (
     <div className="app-container">
@@ -666,7 +692,7 @@ export default function App() {
                               )}
                             </>
                           )}
-                          {playerHealth <= 0 || opponentHealth <= 0 ? (
+                          {playerHealth === 0 || opponentHealth === 0 ? (
                             <button 
                               onClick={resetGame}
                               className="button button-blue"
