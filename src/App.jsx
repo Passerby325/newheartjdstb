@@ -90,7 +90,6 @@ export default function App() {
                   (choice === "Paper" && opponentChoice === "Rock") ||
                   (choice === "Scissors" && opponentChoice === "Paper");
     
-    // Remove win/lose game messages, only show round results
     if (isWin) {
       return "You Win This Round!";
     } else {
@@ -566,7 +565,7 @@ export default function App() {
                     </p>
                   )}
                   
-                  {resultStep >= 3 && !playerHealth <= 0 && !opponentHealth <= 0 && (
+                  {resultStep >= 3 && (
                     <p className="result-text fade-in">
                       {getResult()}
                     </p>
@@ -574,20 +573,43 @@ export default function App() {
                   
                   {resultStep >= 4 && (
                     <>
-                      {playerHealth <= 0 || opponentHealth <= 0 ? (
+                      {getResult() === "It's a tie!" ? (
                         <>
-                          <div className="final-health-display fade-in">
-                            <p>Final Health Status:</p>
-                            <p>You: {playerHealth}/5</p>
-                            <p>{opponentName}: {opponentHealth}/5</p>
-                          </div>
-                          <button 
-                            onClick={resetGame}
-                            className="button button-blue fade-in"
-                          >
-                            Start New Game
-                          </button>
+                          {message && (
+                            <p className="message fade-in">
+                              "{message}" - by <strong>You</strong>
+                            </p>
+                          )}
+                          {opponentMessage && (
+                            <p className="message fade-in">
+                              "{opponentMessage}" - by <strong>{opponentName}</strong>
+                            </p>
+                          )}
                         </>
+                      ) : (
+                        <>
+                          {getResult().includes("Win") ? (
+                            message && (
+                              <p className="message fade-in">
+                                "{message}" - by <strong>You</strong>
+                              </p>
+                            )
+                          ) : (
+                            opponentMessage && (
+                              <p className="message fade-in">
+                                "{opponentMessage}" - by <strong>{opponentName}</strong>
+                              </p>
+                            )
+                          )}
+                        </>
+                      )}
+                      {playerHealth <= 0 || opponentHealth <= 0 ? (
+                        <button 
+                          onClick={resetGame}
+                          className="button button-blue"
+                        >
+                          Start New Game
+                        </button>
                       ) : (
                         <button 
                           onClick={nextRound}
@@ -606,11 +628,9 @@ export default function App() {
           {step === "gameover" && (
             <div className="center-column">
               <h1 className="title">Game Over</h1>
-              <div className="final-health-display">
-                <p>Final Health Status:</p>
-                <p>You: {playerHealth}/5</p>
-                <p>{opponentName}: {opponentHealth}/5</p>
-              </div>
+              <p className="result-text">
+                {playerHealth <= 0 ? "You Lost!" : "You Won!"}
+              </p>
               <button 
                 onClick={resetGame}
                 className="button button-blue"
