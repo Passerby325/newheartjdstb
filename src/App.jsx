@@ -271,9 +271,25 @@ export default function App() {
         if (isPlayerA) {
           setPlayerHealth(data.playerAHealth || 5);
           setOpponentHealth(data.playerBHealth || 5);
+          if (data.playerAHealth <= 0 || data.playerBHealth <= 0) {
+            setStep("gameover");
+            if (data.playerBHealth <= 0) {
+              updates[`rooms/${roomCode}/winner`] = "playerA";
+            } else {
+              updates[`rooms/${roomCode}/winner`] = "playerB";
+            }
+          }
         } else {
           setPlayerHealth(data.playerBHealth || 5);
           setOpponentHealth(data.playerAHealth || 5);
+          if (data.playerAHealth <= 0 || data.playerBHealth <= 0) {
+            setStep("gameover");
+            if (data.playerAHealth <= 0) {
+              updates[`rooms/${roomCode}/winner`] = "playerB";
+            } else {
+              updates[`rooms/${roomCode}/winner`] = "playerA";
+            }
+          }
         }
 
         const opponentKey = isPlayerA ? "playerB" : "playerA";
@@ -629,7 +645,9 @@ export default function App() {
             <div className="center-column">
               <h1 className="title">Game Over</h1>
               <p className="result-text">
-                {playerHealth <= 0 ? "You Lost!" : "You Won!"}
+                {(isPlayerA && data?.winner === "playerA") || (!isPlayerA && data?.winner === "playerB") 
+                  ? "You Won!" 
+                  : "You Lost!"}
               </p>
               <button 
                 onClick={resetGame}
