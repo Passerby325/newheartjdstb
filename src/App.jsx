@@ -287,8 +287,11 @@ export default function App() {
           setOpponentMessage(data[opponentKey].message || "");
         }
 
+        // Move the game over check to after result animation
         if (data.playerAHealth <= 0 || data.playerBHealth <= 0) {
-          setStep("gameover");
+          if (finalAnimationComplete) {
+            setStep("gameover");
+          }
         } else if (data.playerA?.nextRound && data.playerB?.nextRound) {
           // 重置游戏相关状态
           setChoice("");
@@ -322,7 +325,7 @@ export default function App() {
 
       return () => unsubscribe();
     }
-  }, [step, roomCode, isPlayerA, db]);
+  }, [step, roomCode, isPlayerA, db, finalAnimationComplete]);
 
   // ⏳ 游戏选择倒计时
   useEffect(() => {
@@ -585,67 +588,30 @@ export default function App() {
                     </p>
                   )}
                   
-                  {resultStep >= 4 && (
+                  {resultStep >= 4 && (playerHealth <= 0 || opponentHealth <= 0) && (
                     <>
-                      {getResult() === "It's a tie!" ? (
-                        <>
-                          {message && (
-                            <p className="message fade-in">
-                              "{message}" - by <strong>You</strong>
-                            </p>
-                          )}
-                          {opponentMessage && (
-                            <p className="message fade-in">
-                              "{opponentMessage}" - by <strong>{opponentName}</strong>
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {getResult().includes("Win") ? (
-                            message && (
-                              <p className="message fade-in">
-                                "{message}" - by <strong>You</strong>
-                              </p>
-                            )
-                          ) : (
-                            opponentMessage && (
-                              <p className="message fade-in">
-                                "{opponentMessage}" - by <strong>{opponentName}</strong>
-                              </p>
-                            )
-                          )}
-                        </>
-                      )}
-                      {(playerHealth <= 0 || opponentHealth <= 0) ? (
-                        <>
-                          {!finalAnimationComplete ? (
-                            <p className="fade-in">The Game is Done!</p>
-                          ) : (
-                            <>
-                              <div className="final-health-display fade-in">
-                                <p>Final Health Status:</p>
-                                <p>You: {playerHealth}/5</p>
-                                <p>{opponentName}: {opponentHealth}/5</p>
-                              </div>
-                              <button 
-                                onClick={resetGame}
-                                className="button button-blue fade-in"
-                              >
-                                Start New Game
-                              </button>
-                            </>
-                          )}
-                        </>
-                      ) : (
-                        <button 
-                          onClick={nextRound}
-                          className="button button-green"
-                        >
-                          Next Round
-                        </button>
-                      )}
+                      <p className="fade-in game-over-message">The Game is Done!</p>
+                      <div className="final-health-display fade-in">
+                        <p>Final Health Status:</p>
+                        <p>You: {playerHealth}/5</p>
+                        <p>{opponentName}: {opponentHealth}/5</p>
+                      </div>
+                      <button 
+                        onClick={resetGame}
+                        className="button button-blue fade-in"
+                      >
+                        Start New Game
+                      </button>
                     </>
+                  )}
+                  
+                  {resultStep >= 4 && playerHealth > 0 && opponentHealth > 0 && (
+                    <button 
+                      onClick={nextRound}
+                      className="button button-green"
+                    >
+                      Next Round
+                    </button>
                   )}
                 </div>
               )}
