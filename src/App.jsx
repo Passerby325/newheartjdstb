@@ -34,8 +34,6 @@ export default function App() {
   const [opponentChoice, setOpponentChoice] = useState(null);
   const [opponentMessage, setOpponentMessage] = useState("");
   const [opponentConfirmed, setOpponentConfirmed] = useState(false);
-  const [nextRoundReady, setNextRoundReady] = useState(false);
-  const [opponentNextRoundReady, setOpponentNextRoundReady] = useState(false);
 
   // 倒计时和结果相关状态
   const [gameCountdown, setGameCountdown] = useState(30);
@@ -47,6 +45,9 @@ export default function App() {
   // 生命值相关状态
   const [playerHealth, setPlayerHealth] = useState(5);
   const [opponentHealth, setOpponentHealth] = useState(5);
+
+  const [playerReady, setPlayerReady] = useState(false);
+  const [opponentReady, setOpponentReady] = useState(false);
 
   const choices = ["Rock", "Paper", "Scissors"];
 
@@ -107,7 +108,6 @@ export default function App() {
     }
   }, [choice, opponentChoice, playerHealth, opponentHealth]);
 
-
 // 🎮 选择动作
   const handleChoiceSelection = useCallback((selectedChoice) => {
     if (!hasConfirmed) {
@@ -155,18 +155,14 @@ export default function App() {
       await update(roomRef, {
         playerA: name,
         playerAHealth: 5,
-        playerANextRound: false,
         createdAt: new Date().toISOString(),
-        status: "waiting",
-        lastUpdateTime: new Date().toISOString()
+        status: "waiting"
       });
       
       setIsPlayerA(true);
       setStep("waiting");
       setPlayerHealth(5);
       setOpponentHealth(5);
-      setNextRoundReady(false);
-      setOpponentNextRoundReady(false);
     } catch (err) {
       setError("Failed to create room: " + err.message);
     } finally {
@@ -206,10 +202,8 @@ export default function App() {
       await update(roomRef, {
         playerB: name,
         playerBHealth: 5,
-        playerBNextRound: false,
         joinedAt: new Date().toISOString(),
-        status: "playing",
-        lastUpdateTime: new Date().toISOString()
+        status: "playing"
       });
 
       setIsPlayerA(false);
@@ -218,8 +212,6 @@ export default function App() {
       setGameCountdown(30);
       setPlayerHealth(5);
       setOpponentHealth(5);
-      setNextRoundReady(false);
-      setOpponentNextRoundReady(false);
     } catch (err) {
       setError("Failed to join room: " + err.message);
     } finally {
@@ -227,41 +219,22 @@ export default function App() {
     }
   }, [name, roomCode, db, validateRoomCode]);
 
-  // 🔄 确认下一轮
+  // 🔄 开始下一轮
   const nextRound = useCallback(async () => {
     try {
-      const playerKey = isPlayerA ? "playerA" : "playerB";
-      const updates = {
-        [`rooms/${roomCode}/${playerKey}NextRound`]: true,
-        [`rooms/${roomCode}/lastUpdateTime`]: new Date().toISOString()
-      };
-      
-      await update(ref(db), updates);
-      setNextRoundReady(true);
+      // 标记本玩家已准备好
+      const playerKey = isPlayerA ? "playerAReady" : "playerBReady";
+      await update(ref(db, `rooms/${roomCode}`), { [playerKey]: true });
+      setPlayerReady(true);
     } catch (err) {
-      setError("Failed to confirm next round: " + err.message);
+      setError("Failed to start next round: " + err.message);
     }
   }, [roomCode, isPlayerA, db]);
 
-  // 🔄 开始下一轮
-  const startNextRound = useCallback(async () => {
+  // 🔄 更新下一轮游戏状态
+  const handleNextRound = useCallback(async () => {
     try {
-      const updates = {
-        [`rooms/${roomCode}/playerA/confirmed`]: false,
-        [`rooms/${roomCode}/playerA/choice`]: null,
-        [`rooms/${roomCode}/playerA/message`]: "",
-        [`rooms/${roomCode}/playerANextRound`]: false,
-        [`rooms/${roomCode}/playerB/confirmed`]: false,
-        [`rooms/${roomCode}/playerB/choice`]: null,
-        [`rooms/${roomCode}/playerB/message`]: "",
-        [`rooms/${roomCode}/playerBNextRound`]: false,
-        [`rooms/${roomCode}/status`]: "playing",
-        [`rooms/${roomCode}/lastUpdateTime`]: new Date().toISOString()
-      };
-      
-      await update(ref(db), updates);
-      
-      // 重置本地状态
+      // 重置游戏相关状态, 保持房间和玩家信息
       setChoice("");
       setMessage("");
       setHasConfirmed(false);
@@ -273,9 +246,23 @@ export default function App() {
       setResultStep(0);
       setIsShaking(false);
       setGameStarted(false);
-      setNextRoundReady(false);
-      setOpponentNextRoundReady(false);
+      setPlayerReady(false);
+      setOpponentReady(false);
       
+      // 更新房间状态
+      const updates = {
+        [`rooms/${roomCode}/playerA/confirmed`]: false,
+        [`rooms/${roomCode}/playerA/choice`]: null,
+        [`rooms/${roomCode}/playerA/message`]: "",
+        [`rooms/${roomCode}/playerB/confirmed`]: false,
+        [`rooms/${roomCode}/playerB/choice`]: null,
+        [`rooms/${roomCode}/playerB/message`]: "",
+        [`rooms/${roomCode}/playerAReady`]: false,
+        [`rooms/${roomCode}/playerBReady`]: false,
+        [`rooms/${roomCode}/status`]: "playing"
+      };
+
+      await update(ref(db), updates);
       setStep("game");
     } catch (err) {
       setError("Failed to start next round: " + err.message);
@@ -312,8 +299,8 @@ export default function App() {
     setError("");
     setPlayerHealth(5);
     setOpponentHealth(5);
-    setNextRoundReady(false);
-    setOpponentNextRoundReady(false);
+    setPlayerReady(false);
+    setOpponentReady(false);
   }, [roomCode, db]);
 
 // 👀 监听房间状态和对手
@@ -324,275 +311,210 @@ export default function App() {
         const data = snapshot.val();
         if (!data) return;
 
-        // 检查房间是否已过期（5分钟无更新）
-        const now = new Date();
-        const lastUpdate = new Date(data.lastUpdateTime || data.createdAt);
-        const timeDiff = now - lastUpdate;
-        if (timeDiff > 5 * 60 * 1000) {
-          resetGame();
-          return;
-        }
-
         if (step === "waiting" && data.status === "playing") {
           setOpponentName(data.playerB);
           setStep("game");
           setGameCountdown(30);
         }
 
-        // 检查游戏状态
-        if (data.status === "gameover") {
-          setStep("result");
-          setResultStep(4); // 直接跳到最终结果
-        }
-
         // 更新生命值
         if (isPlayerA) {
           setPlayerHealth(data.playerAHealth || 5);
           setOpponentHealth(data.playerBHealth || 5);
-          setNextRoundReady(data.playerANextRound || false);
-          setOpponentNextRoundReady(data.playerBNextRound || false);
         } else {
           setPlayerHealth(data.playerBHealth || 5);
           setOpponentHealth(data.playerAHealth || 5);
-          setNextRoundReady(data.playerBNextRound || false);
-          setOpponentNextRoundReady(data.playerANextRound || false);
         }
 
-        // 检查是否双方都准备好下一轮
-        if (data.playerANextRound && data.playerBNextRound) {
-          startNextRound();
-        }
-
+        // 更新对手信息
         const opponentKey = isPlayerA ? "playerB" : "playerA";
         if (data[opponentKey]?.confirmed) {
           setOpponentConfirmed(true);
           setOpponentChoice(data[opponentKey].choice);
           setOpponentMessage(data[opponentKey].message || "");
         }
+
+        // 检查对手是否准备好进行下一轮
+        if (data.playerAReady) setOpponentReady(true);
+        if (data.playerBReady) setOpponentReady(true);
+
+        // 检查双方是否都准备好进行下一轮
+        if (data.playerAReady && data.playerBReady) {
+          handleNextRound();
+        }
       });
 
       return () => unsubscribe();
     }
-  }, [step, roomCode, isPlayerA, resetGame, startNextRound]);
+  }, [step, roomCode, isPlayerA, db, handleNextRound]);
 
-  // ... [保持其他 effects 不变] ...
+  // ⏳ 游戏选择倒计时
+  useEffect(() => {
+    let timer;
+    if (step === "game" && !gameStarted && gameCountdown > 0) {
+      timer = setInterval(() => {
+        setGameCountdown((prev) => {
+          if (prev <= 1) {
+            if (!hasConfirmed && choice) {
+              handleConfirm();
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [step, gameStarted, gameCountdown, hasConfirmed, choice, handleConfirm]);
+
+  // ⏳ 结果展示倒计时
+  useEffect(() => {
+    let timer;
+    if (step === "result") {
+      if (resultCountdown > 0) {
+        timer = setInterval(() => {
+          setResultCountdown(prev => prev - 1);
+        }, 1000);
+      } else if (resultStep < 4) {
+        timer = setTimeout(() => {
+          setResultStep(prev => {
+            if (prev < 4) {
+              startShaking();
+              return prev + 1;
+            }
+            return prev;
+          });
+        }, 1000);
+      }
+    }
+    return () => {
+      clearInterval(timer);
+      clearTimeout(timer);
+    };
+  }, [step, resultCountdown, resultStep, startShaking]);
+
+  // 🎮 检查游戏结束并更新生命值
+  useEffect(() => {
+    const updateHealthAndGameState = async (isGameWin) => {
+      let newPlayerHealth = playerHealth;
+      let newOpponentHealth = opponentHealth;
+
+      if (isGameWin) {
+        newOpponentHealth -= 1;
+      } else {
+        newPlayerHealth -= 1;
+      }
+
+      // 更新 Firebase
+      const updates = {};
+      if (isPlayerA) {
+        updates[`rooms/${roomCode}/playerAHealth`] = newPlayerHealth;
+        updates[`rooms/${roomCode}/playerBHealth`] = newOpponentHealth;
+      } else {
+        updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
+        updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
+      }
+
+      if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
+        updates[`rooms/${roomCode}/status`] = "gameover";
+      }
+
+      await update(ref(db), updates);
+      
+      // 更新本地状态
+      setPlayerHealth(newPlayerHealth);
+      setOpponentHealth(newOpponentHealth);
+    };
+
+    if (step === "game" && (hasConfirmed && opponentConfirmed || gameCountdown === 0)) {
+      if (choice && opponentChoice && choice !== opponentChoice) {
+        const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
+                     (choice === "Paper" && opponentChoice === "Rock") ||
+                     (choice === "Scissors" && opponentChoice === "Paper");
+        
+        updateHealthAndGameState(isWin);
+      }
+
+      setGameStarted(true);
+      setStep("result");
+      setResultStep(0);
+    }
+  }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, 
+      playerHealth, opponentHealth, roomCode, isPlayerA, db]);
 
   return (
     <div className="app-container">
       <div className="max-width-container">
         <div className="center-column">
+          {error && (
+            <div className="error">
+              {error}
+            </div>
+          )}
 
           {step === "login" && (
-  <div className="center-column">
-    <h1 className="title">Rock Paper Scissors</h1>
-    <p className="subtitle">
-      Create a room by entering a 4-character room code. 
-      Others can join your room by entering the same code.
-    </p>
-    <input
-      type="text"
-      placeholder="Your Name"
-      className="input"
-      value={name}
-      onChange={(e) => setName(e.target.value)}
-      disabled={loading}
-    />
-    <input
-      type="text"
-      placeholder="Room Code (4 characters)"
-      className="input"
-      value={roomCode}
-      onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-      maxLength={4}
-      disabled={loading}
-    />
-    <button 
-      onClick={handleCreateRoom}
-      className={`button button-blue ${loading ? 'disabled' : ''}`}
-      disabled={loading}
-    >
-      {loading ? 'Creating...' : 'Create Room'}
-    </button>
-    <button 
-      onClick={handleJoinRoom}
-      className={`button button-green ${loading ? 'disabled' : ''}`}
-      disabled={loading}
-    >
-      {loading ? 'Joining...' : 'Join Room'}
-    </button>
-  </div>
-)}
-          {step === "game" && (
-  <div className="center-column">
-    <h1 className="title">Make Your Move</h1>
-    
-    <div className="health-display">
-      <div className="health-bar">
-        <span className="health-label">Your Health: ({playerHealth}/5)</span>
-      </div>
-      
-      <div className="health-bar">
-        <span className="health-label">{opponentName}'s Health: ({opponentHealth}/5)</span>
-      </div>
-    </div>
-
-    <p className="opponent-name">Your opponent: {opponentName}</p>
-    {!gameStarted && (
-      <div className="countdown">
-        Time remaining: {gameCountdown} seconds
-      </div>
-    )}
-
-    <div className="choices-container">
-      {choices.map((c) => (
-        <button
-          key={c}
-          className={`button ${
-            choice === c ? 'button-green' : 'button-gray'
-          } ${hasConfirmed ? 'disabled' : ''}`}
-          onClick={() => handleChoiceSelection(c)}
-          disabled={hasConfirmed}
-        >
-          {c}
-        </button>
-      ))}
-    </div>
-
-    <input
-      type="text"
-      placeholder="Message to opponent (optional)"
-      className="input"
-      value={message}
-      onChange={(e) => setMessage(e.target.value)}
-      disabled={hasConfirmed}
-    />
-
-    <button 
-      onClick={handleConfirm}
-      disabled={!choice || hasConfirmed}
-      className={`button button-blue ${(!choice || hasConfirmed) ? 'disabled' : ''}`}
-    >
-      {hasConfirmed ? 'Waiting for opponent...' : 'Confirm'}
-    </button>
-    
-    {hasConfirmed && !opponentConfirmed && (
-      <p className="waiting-message">
-        Waiting for opponent to confirm...
-      </p>
-    )}
-    {opponentConfirmed && !hasConfirmed && (
-      <p className="waiting-message">
-        Opponent has made their choice!
-      </p>
-    )}
-  </div>
-)}
-
-          {step === "result" && (
             <div className="center-column">
+              <h1 className="title">Rock Paper Scissors</h1>
+              <p className="subtitle">
+                Create a room by entering a 4-character room code. 
+                Others can join your room by entering the same code.
+              </p>
+              <input
+                type="text"
+                placeholder="Your Name"
+                className="input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={loading}
+              />
+              <input
+                type="text"
+                placeholder="Room Code (4 characters)"
+                className="input"
+                value={roomCode}
+                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                maxLength={4}
+                disabled={loading}
+              />
+              <button 
+                onClick={handleCreateRoom}
+                className={`button button-blue ${loading ? 'disabled' : ''}`}
+                disabled={loading}
+              >
+                {loading ? 'Creating...' : 'Create Room'}
+              </button>
+              <button 
+                onClick={handleJoinRoom}
+                className={`button button-green ${loading ? 'disabled' : ''}`}
+                disabled={loading}
+              >
+                {loading ? 'Joining...' : 'Join Room'}
+              </button>
+            </div>
+          )}
+
+          {step === "waiting" && (
+            <div className="center-column">
+              <h1 className="title">Waiting for opponent...</h1>
+              <p className="room-code">Room Code: {roomCode}</p>
               <div className="health-display">
                 <div className="health-bar">
                   <span className="health-label">Your Health: ({playerHealth}/5)</span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {step === "game" && (
+            <div className="center-column">
+              <h1 className="title">Make Your Move</h1>
+              
+              <div className="health-display">
+                <div className="health-bar">
+                  <span className="health-label">Your Health: ({playerHealth}/5)</span>
+                </div>
+                
                 <div className="health-bar">
                   <span className="health-label">{opponentName}'s Health: ({opponentHealth}/5)</span>
                 </div>
               </div>
-
-              {resultCountdown > 0 ? (
-                <h1 className="title">
-                  Revealing in {resultCountdown}...
-                </h1>
-              ) : (
-                <div className={`result-container ${isShaking ? 'shake' : ''}`}>
-                  <h2 className="result-title">Results:</h2>
-                  
-                  {resultStep >= 1 && (
-                    <p className="fade-in">
-                      <strong>You</strong> chose: {choice}
-                    </p>
-                  )}
-                  
-                  {resultStep >= 2 && (
-                    <p className="fade-in">
-                      <strong>{opponentName}</strong> chose: {opponentChoice}
-                    </p>
-                  )}
-                  
-                  {resultStep >= 3 && (
-                    <p className="result-text fade-in">
-                      {getResult()}
-                    </p>
-                  )}
-                  
-                  {resultStep >= 4 && (
-                    <>
-                      {getResult() === "It's a tie!" ? (
-                        <>
-                          {message && (
-                            <p className="message fade-in">
-                              "{message}" - by <strong>You</strong>
-                            </p>
-                          )}
-                          {opponentMessage && (
-                            <p className="message fade-in">
-                              "{opponentMessage}" - by <strong>{opponentName}</strong>
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {getResult().includes("Win") ? (
-                            message && (
-                              <p className="message fade-in">
-                                "{message}" - by <strong>You</strong>
-                              </p>
-                            )
-                          ) : (
-                            opponentMessage && (
-                              <p className="message fade-in">
-                                "{opponentMessage}" - by <strong>{opponentName}</strong>
-                              </p>
-                            )
-                          )}
-                        </>
-                      )}
-                      {playerHealth <= 0 || opponentHealth <= 0 ? (
-                        <button 
-                          onClick={resetGame}
-                          className="button button-blue"
-                        >
-                          Start New Game
-                        </button>
-                      ) : (
-                        <>
-                          <button 
-                            onClick={nextRound}
-                            className={`button button-green ${nextRoundReady ? 'disabled' : ''}`}
-                            disabled={nextRoundReady}
-                          >
-                            {nextRoundReady ? 'Waiting for opponent...' : 'Next Round'}
-                          </button>
-                          {nextRoundReady && !opponentNextRoundReady && (
-                            <p className="waiting-message">
-                              Waiting for opponent to confirm next round...
-                            </p>
-                          )}
-                          {!nextRoundReady && opponentNextRoundReady && (
-                            <p className="waiting-message">
-                              Opponent is ready for next round!
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
