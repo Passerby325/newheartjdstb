@@ -381,6 +381,47 @@ export default function App() {
     <div className="app-container">
       <div className="max-width-container">
         <div className="center-column">
+
+          {step === "login" && (
+  <div className="center-column">
+    <h1 className="title">Rock Paper Scissors</h1>
+    <p className="subtitle">
+      Create a room by entering a 4-character room code. 
+      Others can join your room by entering the same code.
+    </p>
+    <input
+      type="text"
+      placeholder="Your Name"
+      className="input"
+      value={name}
+      onChange={(e) => setName(e.target.value)}
+      disabled={loading}
+    />
+    <input
+      type="text"
+      placeholder="Room Code (4 characters)"
+      className="input"
+      value={roomCode}
+      onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+      maxLength={4}
+      disabled={loading}
+    />
+    <button 
+      onClick={handleCreateRoom}
+      className={`button button-blue ${loading ? 'disabled' : ''}`}
+      disabled={loading}
+    >
+      {loading ? 'Creating...' : 'Create Room'}
+    </button>
+    <button 
+      onClick={handleJoinRoom}
+      className={`button button-green ${loading ? 'disabled' : ''}`}
+      disabled={loading}
+    >
+      {loading ? 'Joining...' : 'Join Room'}
+    </button>
+  </div>
+)}
           {step === "game" && (
   <div className="center-column">
     <h1 className="title">Make Your Move</h1>
