@@ -71,9 +71,6 @@ export default function App() {
         updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
       }
       
-      if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-        updates[`rooms/${roomCode}/status`] = "gameover";
-      }
       
       await update(ref(db), updates);
     } catch (err) {
@@ -283,8 +280,6 @@ export default function App() {
           setOpponentMessage(data[opponentKey].message || "");
         }
 
-        if (data.playerAHealth < 0 || data.playerBHealth < 0) {
-          setStep("gameover");
         } else if (data.playerA?.nextRound && data.playerB?.nextRound) {
           // 重置游戏相关状态
           setChoice("");
@@ -543,127 +538,97 @@ export default function App() {
             </div>
           )}
 
-          {step === "result" && (
-            <div className="center-column">
-              {resultCountdown > 0 ? (
-                <h1 className="title">
-                  Revealing in {resultCountdown}...
-                </h1>
-              ) : (
-                <div className={`result-container ${isShaking ? 'shake' : ''}`}>
-                  <h2 className="result-title">Results:</h2>
-                  
-                  {resultStep >= 1 && (
-                    <p className="fade-in">
-                      <strong>You</strong> chose: {choice}
-                    </p>
-                  )}
-                  
-                  {resultStep >= 2 && (
-                    <p className="fade-in">
-                      <strong>{opponentName}</strong> chose: {opponentChoice}
-                    </p>
-                  )}
-                  
-                  {resultStep >= 3 && (
-                    <>
-                      <p className="result-text fade-in">
-                        {getResult()}
-                      </p>
-                      {(playerHealth === 0 || opponentHealth === 0) && (
-                        <div className="health-status fade-in">
-                          <p>Current Health Status:</p>
-                          <p>You: {playerHealth}/5</p>
-                          <p>{opponentName}: {opponentHealth}/5</p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                  
-                  {resultStep >= 4 && (
-                    <>
-                      {getResult() === "It's a tie!" ? (
-                        <>
-                          {message && (
-                            <p className="message fade-in">
-                              "{message}" - by <strong>You</strong>
-                            </p>
-                          )}
-                          {opponentMessage && (
-                            <p className="message fade-in">
-                              "{opponentMessage}" - by <strong>{opponentName}</strong>
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {getResult().includes("Win") ? (
-                            message && (
-                              <p className="message fade-in">
-                                "{message}" - by <strong>You</strong>
-                              </p>
-                            )
-                          ) : (
-                            opponentMessage && (
-                              <p className="message fade-in">
-                                "{opponentMessage}" - by <strong>{opponentName}</strong>
-                              </p>
-                            )
-                          )}
-                        </>
-                      )}
-                      {playerHealth <= 0 || opponentHealth <= 0 ? (
-                        <button 
-                          onClick={resetGame}
-                          className="button button-blue"
-                        >
-                          Start New Game
-                        </button>
-                      ) : (
-                        <button 
-                          onClick={nextRound}
-                          className="button button-green"
-                        >
-                          Next Round
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
+{step === "result" && (
+  <div className="center-column">
+    {resultCountdown > 0 ? (
+      <h1 className="title">Revealing in {resultCountdown}...</h1>
+    ) : (
+      <div className={`result-container ${isShaking ? 'shake' : ''}`}>
+        <h2 className="result-title">Results:</h2>
+        
+        {resultStep >= 1 && (
+          <p className="fade-in">
+            <strong>You</strong> chose: {choice}
+          </p>
+        )}
+        
+        {resultStep >= 2 && (
+          <p className="fade-in">
+            <strong>{opponentName}</strong> chose: {opponentChoice}
+          </p>
+        )}
+        
+        {resultStep >= 3 && (
+          <>
+            <p className="result-text fade-in">
+              {getResult()}
+            </p>
+            
+            {/* 始终显示生命值 */}
+            <div className="health-status fade-in">
+              <p>Current Health Status:</p>
+              <p>You: {playerHealth}/5</p>
+              <p>{opponentName}: {opponentHealth}/5</p>
             </div>
-          )}
 
-          {step === "gameover" && (
-            <div className="center-column">
-              <h1 className="title">Game Over</h1>
-              <p className="result-text">
-                {playerHealth <= 0 ? "You Lost!" : "Guess who won?"}
-              </p>
+            {/* 显示额外消息 */}
+            {getResult() === "It's a tie!" ? (
+              <>
+                {message && (
+                  <p className="message fade-in">
+                    "{message}" - by <strong>You</strong>
+                  </p>
+                )}
+                {opponentMessage && (
+                  <p className="message fade-in">
+                    "{opponentMessage}" - by <strong>{opponentName}</strong>
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                {getResult().includes("Win") ? (
+                  message && (
+                    <p className="message fade-in">
+                      "{message}" - by <strong>You</strong>
+                    </p>
+                  )
+                ) : (
+                  opponentMessage && (
+                    <p className="message fade-in">
+                      "{opponentMessage}" - by <strong>{opponentName}</strong>
+                    </p>
+                  )
+                )}
+              </>
+            )}
+
+            {/* 游戏结束判断 */}
+            {(playerHealth <= 0 || opponentHealth <= 0) ? (
+              <>
+                <p className="result-text">GAME OVER!</p>
+                <button 
+                  onClick={resetGame}
+                  className="button button-blue"
+                >
+                  Start New Game
+                </button>
+              </>
+            ) : (
               <button 
-                onClick={resetGame}
-                className="button button-blue"
+                onClick={nextRound}
+                className="button button-green"
               >
-                Start New Game
+                Next Round
               </button>
-            </div>
-          )}
-        </div>
+            )}
+          </>
+        )}
       </div>
-    </div>
-  );
-}
+    )}
+  </div>
+)}
 
-// 添加样式（可以放在CSS文件中）
-const styles = `
-.health-status {
-  margin: 20px 0;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 5px;
-}
-
-.health-status p {
-  margin: 5px 0;
-}
-`;
+                  
+                  
+                
