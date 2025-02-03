@@ -46,9 +46,6 @@ export default function App() {
   const [playerHealth, setPlayerHealth] = useState(5);
   const [opponentHealth, setOpponentHealth] = useState(5);
 
-  // 添加新的状态来存储回合结果
-  const [roundResult, setRoundResult] = useState(null);
-
   const choices = ["Rock", "Paper", "Scissors"];
 
   // 🔍 验证房间代码
@@ -87,17 +84,17 @@ export default function App() {
   // 🎮 获取游戏结果
   const getResult = useCallback(() => {
     if (!opponentChoice) return "Waiting...";
-    if (choice === opponentChoice) {
-      setRoundResult(null);
-      return "It's a tie!";
-    }
+    if (choice === opponentChoice) return "It's a tie!";
     
     const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
                   (choice === "Paper" && opponentChoice === "Rock") ||
                   (choice === "Scissors" && opponentChoice === "Paper");
     
-    setRoundResult(isWin);
-    return isWin ? "You Win This Round!" : "You Lose This Round!";
+    if (isWin) {
+      return "You Win This Round!";
+    } else {
+      return "You Lose This Round!";
+    }
   }, [choice, opponentChoice]);
 
   // 🎮 选择动作
@@ -214,34 +211,15 @@ export default function App() {
   // 🔄 开始下一轮
   const nextRound = useCallback(async () => {
     try {
-      let newPlayerHealth = playerHealth;
-      let newOpponentHealth = opponentHealth;
-
-      // 只在非平局时更新生命值
-      if (roundResult !== null) {
-        if (roundResult) {
-          newOpponentHealth -= 1;
-        } else {
-          newPlayerHealth -= 1;
-        }
-      }
-
       const playerKey = isPlayerA ? "playerA" : "playerB";
       const updates = {
         [`rooms/${roomCode}/${playerKey}/nextRound`]: true,
-        [`rooms/${roomCode}/playerAHealth`]: isPlayerA ? newPlayerHealth : newOpponentHealth,
-        [`rooms/${roomCode}/playerBHealth`]: isPlayerA ? newOpponentHealth : newPlayerHealth,
       };
-
-      if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-        updates[`rooms/${roomCode}/status`] = "gameover";
-      }
-
       await update(ref(db), updates);
     } catch (err) {
       setError("Failed to start next round: " + err.message);
     }
-  }, [roomCode, isPlayerA, db, playerHealth, opponentHealth, roundResult]);
+  }, [roomCode, isPlayerA, db]);
 
 // 🔄 重置游戏并清除房间数据
   const resetGame = useCallback(async () => {
@@ -273,7 +251,6 @@ export default function App() {
     setError("");
     setPlayerHealth(5);
     setOpponentHealth(5);
-    setRoundResult(null);
   }, [roomCode, db]);
 
   // 👀 监听房间状态和对手
@@ -306,9 +283,8 @@ export default function App() {
           setOpponentMessage(data[opponentKey].message || "");
         }
 
-        // 这里检查生命值是否为0
-        if (data.playerAHealth <= 0 || data.playerBHealth <= 0) {
-          setStep("gameover");  // 触发游戏结束
+        if (data.playerAHealth < 0 || data.playerBHealth < 0) {
+          setStep("gameover");
         } else if (data.playerA?.nextRound && data.playerB?.nextRound) {
           // 重置游戏相关状态
           setChoice("");
@@ -391,12 +367,44 @@ export default function App() {
 
   // 🎮 检查游戏结束并更新生命值
   useEffect(() => {
+    const updateHealthAndGameState = async (isGameWin) => {
+      let newPlayerHealth = playerHealth;
+      let newOpponentHealth = opponentHealth;
+
+      if (isGameWin) {
+        newOpponentHealth -= 1;
+      } else {
+        newPlayerHealth -= 1;
+      }
+
+      // 更新 Firebase
+      const updates = {};
+      if (isPlayerA) {
+        updates[`rooms/${roomCode}/playerAHealth`] = newPlayerHealth;
+        updates[`rooms/${roomCode}/playerBHealth`] = newOpponentHealth;
+      } else {
+        updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
+        updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
+      }
+
+      if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
+        updates[`rooms/${roomCode}/status`] = "gameover";
+      }
+
+      await update(ref(db), updates);
+      
+      // 更新本地状态
+      setPlayerHealth(newPlayerHealth);
+      setOpponentHealth(newOpponentHealth);
+    };
+
     if (step === "game" && (hasConfirmed && opponentConfirmed || gameCountdown === 0)) {
       if (choice && opponentChoice && choice !== opponentChoice) {
         const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
                      (choice === "Paper" && opponentChoice === "Rock") ||
                      (choice === "Scissors" && opponentChoice === "Paper");
-        setRoundResult(isWin);
+        
+        updateHealthAndGameState(isWin);
       }
 
       setGameStarted(true);
@@ -558,9 +566,18 @@ export default function App() {
                   )}
                   
                   {resultStep >= 3 && (
-                    <p className="result-text fade-in">
-                      {getResult()}
-                    </p>
+                    <>
+                      <p className="result-text fade-in">
+                        {getResult()}
+                      </p>
+                      {(playerHealth === 0 || opponentHealth === 0) && (
+                        <div className="health-status fade-in">
+                          <p>Current Health Status:</p>
+                          <p>You: {playerHealth}/5</p>
+                          <p>{opponentName}: {opponentHealth}/5</p>
+                        </div>
+                      )}
+                    </>
                   )}
                   
                   {resultStep >= 4 && (
@@ -636,3 +653,17 @@ export default function App() {
     </div>
   );
 }
+
+// 添加样式（可以放在CSS文件中）
+const styles = `
+.health-status {
+  margin: 20px 0;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 5px;
+}
+
+.health-status p {
+  margin: 5px 0;
+}
+`;
