@@ -280,6 +280,9 @@ export default function App() {
           setOpponentMessage(data[opponentKey].message || "");
         }
 
+        // 修正游戏结束判断
+        if (data.playerAHealth < 0 || data.playerBHealth < 0) {
+          setStep("gameover");
         } else if (data.playerA?.nextRound && data.playerB?.nextRound) {
           // 重置游戏相关状态
           setChoice("");
@@ -629,6 +632,5 @@ export default function App() {
   </div>
 )}
 
-                  
-                  
-                
+
+
