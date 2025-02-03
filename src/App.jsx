@@ -59,7 +59,7 @@ export default function App() {
     setTimeout(() => setIsShaking(false), 500);
   }, []);
 
-// 🎮 更新游戏状态到 Firebase
+  // 🎮 更新游戏状态到 Firebase
   const updateGameState = useCallback(async (newPlayerHealth, newOpponentHealth) => {
     try {
       const updates = {};
@@ -70,8 +70,6 @@ export default function App() {
         updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
         updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
       }
-      
-      
       await update(ref(db), updates);
     } catch (err) {
       setError("Failed to update game state: " + err.message);
@@ -208,17 +206,32 @@ export default function App() {
   // 🔄 开始下一轮
   const nextRound = useCallback(async () => {
     try {
-      const playerKey = isPlayerA ? "playerA" : "playerB";
       const updates = {
-        [`rooms/${roomCode}/${playerKey}/nextRound`]: true,
+        [`rooms/${roomCode}/playerA/nextRound`]: true,
+        [`rooms/${roomCode}/playerB/nextRound`]: true,
+        [`rooms/${roomCode}/status`]: "playing"
       };
+      
       await update(ref(db), updates);
+
+      // 本地状态重置
+      setChoice("");
+      setMessage("");
+      setHasConfirmed(false);
+      setOpponentChoice(null);
+      setOpponentMessage("");
+      setOpponentConfirmed(false);
+      setGameCountdown(30);
+      setResultCountdown(3);
+      setResultStep(0);
+      setStep("game");
+
     } catch (err) {
       setError("Failed to start next round: " + err.message);
     }
-  }, [roomCode, isPlayerA, db]);
+  }, [roomCode, db]);
 
-// 🔄 重置游戏并清除房间数据
+  // 🔄 重置游戏并清除房间数据
   const resetGame = useCallback(async () => {
     try {
       if (roomCode) {
@@ -258,19 +271,27 @@ export default function App() {
         const data = snapshot.val();
         if (!data) return;
 
+        // 处理等待房间状态
         if (step === "waiting" && data.status === "playing") {
           setOpponentName(data.playerB);
           setStep("game");
           setGameCountdown(30);
         }
 
-        // 更新生命值
-        if (isPlayerA) {
-          setPlayerHealth(data.playerAHealth || 5);
-          setOpponentHealth(data.playerBHealth || 5);
-        } else {
-          setPlayerHealth(data.playerBHealth || 5);
-          setOpponentHealth(data.playerAHealth || 5);
+        // 统一处理生命值更新
+        const shouldUpdateHealth = 
+          data.playerAHealth !== undefined && 
+          data.playerBHealth !== undefined;
+          
+        if (shouldUpdateHealth) {
+          setPlayerHealth(isPlayerA ? data.playerAHealth : data.playerBHealth);
+          setOpponentHealth(isPlayerA ? data.playerBHealth : data.playerAHealth);
+        }
+
+        // 处理游戏结束状态
+        if (data.status === "gameover") {
+          setStep("result");
+          setResultStep(4); // 直接显示最终结果
         }
 
         const opponentKey = isPlayerA ? "playerB" : "playerA";
@@ -280,10 +301,7 @@ export default function App() {
           setOpponentMessage(data[opponentKey].message || "");
         }
 
-        // 修正游戏结束判断
-        if (data.playerAHealth < 0 || data.playerBHealth < 0) {
-          setStep("gameover");
-        } else if (data.playerA?.nextRound && data.playerB?.nextRound) {
+        if (data.playerA?.nextRound && data.playerB?.nextRound) {
           // 重置游戏相关状态
           setChoice("");
           setMessage("");
@@ -348,12 +366,16 @@ export default function App() {
       } else if (resultStep < 4) {
         timer = setTimeout(() => {
           setResultStep(prev => {
-            if (prev < 4) {
-              startShaking();
-              return prev + 1;
+            const nextStep = prev + 1;
+            if (nextStep === 3) {
+              // 检查游戏结束条件
+              if (playerHealth <= 0 || opponentHealth <= 0) {
+                return 4; // 直接跳转到最终结果
+              }
             }
-            return prev;
+            return nextStep;
           });
+          startShaking();
         }, 1000);
       }
     }
@@ -361,56 +383,65 @@ export default function App() {
       clearInterval(timer);
       clearTimeout(timer);
     };
-  }, [step, resultCountdown, resultStep, startShaking]);
+  }, [step, resultCountdown, resultStep, playerHealth, opponentHealth]);
 
   // 🎮 检查游戏结束并更新生命值
   useEffect(() => {
-    const updateHealthAndGameState = async (isGameWin) => {
+    const updateHealthAndGameState = async (isWin) => {
       let newPlayerHealth = playerHealth;
       let newOpponentHealth = opponentHealth;
 
-      if (isGameWin) {
-        newOpponentHealth -= 1;
+      // 计算新生命值
+      if (isWin) {
+        newOpponentHealth = Math.max(0, opponentHealth - 1);
       } else {
-        newPlayerHealth -= 1;
+        newPlayerHealth = Math.max(0, playerHealth - 1);
       }
 
-      // 更新 Firebase
-      const updates = {};
-      if (isPlayerA) {
-        updates[`rooms/${roomCode}/playerAHealth`] = newPlayerHealth;
-        updates[`rooms/${roomCode}/playerBHealth`] = newOpponentHealth;
-      } else {
-        updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
-        updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
-      }
-
-      if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-        updates[`rooms/${roomCode}/status`] = "gameover";
-      }
-
-      await update(ref(db), updates);
-      
       // 更新本地状态
       setPlayerHealth(newPlayerHealth);
       setOpponentHealth(newOpponentHealth);
+
+      // 更新Firebase
+      try {
+        const updates = {};
+        const healthUpdatePath = isPlayerA ? {
+          playerA: newPlayerHealth,
+          playerB: newOpponentHealth
+        } : {
+          playerB: newPlayerHealth,
+          playerA: newOpponentHealth
+        };
+
+        updates[`rooms/${roomCode}/playerAHealth`] = healthUpdatePath.playerA;
+        updates[`rooms/${roomCode}/playerBHealth`] = healthUpdatePath.playerB;
+
+        if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
+          updates[`rooms/${roomCode}/status`] = "gameover";
+        }
+
+        await update(ref(db), updates);
+      } catch (err) {
+        setError("生命值更新失败: " + err.message);
+      }
     };
 
-    if (step === "game" && (hasConfirmed && opponentConfirmed || gameCountdown === 0)) {
-      if (choice && opponentChoice && choice !== opponentChoice) {
+    // 触发条件判断
+    if (step === "game" && (hasConfirmed && opponentConfirmed) || gameCountdown === 0) {
+      if (choice && opponentChoice) {
         const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
                      (choice === "Paper" && opponentChoice === "Rock") ||
                      (choice === "Scissors" && opponentChoice === "Paper");
         
-        updateHealthAndGameState(isWin);
+        if (choice !== opponentChoice) {
+          updateHealthAndGameState(isWin);
+        }
       }
-
-      setGameStarted(true);
+      
       setStep("result");
       setResultStep(0);
     }
-  }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, 
-      playerHealth, opponentHealth, roomCode, isPlayerA, db]);
+  }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice]);
 
   return (
     <div className="app-container">
@@ -541,96 +572,98 @@ export default function App() {
             </div>
           )}
 
-{step === "result" && (
-  <div className="center-column">
-    {resultCountdown > 0 ? (
-      <h1 className="title">Revealing in {resultCountdown}...</h1>
-    ) : (
-      <div className={`result-container ${isShaking ? 'shake' : ''}`}>
-        <h2 className="result-title">Results:</h2>
-        
-        {resultStep >= 1 && (
-          <p className="fade-in">
-            <strong>You</strong> chose: {choice}
-          </p>
-        )}
-        
-        {resultStep >= 2 && (
-          <p className="fade-in">
-            <strong>{opponentName}</strong> chose: {opponentChoice}
-          </p>
-        )}
-        
-        {resultStep >= 3 && (
-          <>
-            <p className="result-text fade-in">
-              {getResult()}
-            </p>
-            
-            {/* 始终显示生命值 */}
-            <div className="health-status fade-in">
-              <p>Current Health Status:</p>
-              <p>You: {playerHealth}/5</p>
-              <p>{opponentName}: {opponentHealth}/5</p>
+          {step === "result" && (
+            <div className="center-column">
+              {resultCountdown > 0 ? (
+                <h1 className="title">Revealing in {resultCountdown}...</h1>
+              ) : (
+                <div className={`result-container ${isShaking ? 'shake' : ''}`}>
+                  <h2 className="result-title">Results:</h2>
+                  
+                  {resultStep >= 1 && (
+                    <p className="fade-in">
+                      <strong>You</strong> chose: {choice}
+                    </p>
+                  )}
+                  
+                  {resultStep >= 2 && (
+                    <p className="fade-in">
+                      <strong>{opponentName}</strong> chose: {opponentChoice}
+                    </p>
+                  )}
+                  
+                  {resultStep >= 3 && (
+                    <>
+                      <p className="result-text fade-in">
+                        {getResult()}
+                      </p>
+                      
+                      {/* 始终显示生命值 */}
+                      <div className="health-status fade-in">
+                        <p>Current Health Status:</p>
+                        <p>You: {playerHealth}/5</p>
+                        <p>{opponentName}: {opponentHealth}/5</p>
+                      </div>
+
+                      {/* 显示额外消息 */}
+                      {getResult() === "It's a tie!" ? (
+                        <>
+                          {message && (
+                            <p className="message fade-in">
+                              "{message}" - by <strong>You</strong>
+                            </p>
+                          )}
+                          {opponentMessage && (
+                            <p className="message fade-in">
+                              "{opponentMessage}" - by <strong>{opponentName}</strong>
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {getResult().includes("Win") ? (
+                            message && (
+                              <p className="message fade-in">
+                                "{message}" - by <strong>You</strong>
+                              </p>
+                            )
+                          ) : (
+                            opponentMessage && (
+                              <p className="message fade-in">
+                                "{opponentMessage}" - by <strong>{opponentName}</strong>
+                              </p>
+                            )
+                          )}
+                        </>
+                      )}
+
+                      {/* 游戏结束判断 */}
+                      {(playerHealth <= 0 || opponentHealth <= 0) ? (
+                        <>
+                          <p className="result-text">GAME OVER!</p>
+                          <button 
+                            onClick={resetGame}
+                            className="button button-blue"
+                          >
+                            Start New Game
+                          </button>
+                        </>
+                      ) : (
+                        <button 
+                          onClick={nextRound}
+                          className="button button-green"
+                        >
+                          Next Round
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-
-            {/* 显示额外消息 */}
-            {getResult() === "It's a tie!" ? (
-              <>
-                {message && (
-                  <p className="message fade-in">
-                    "{message}" - by <strong>You</strong>
-                  </p>
-                )}
-                {opponentMessage && (
-                  <p className="message fade-in">
-                    "{opponentMessage}" - by <strong>{opponentName}</strong>
-                  </p>
-                )}
-              </>
-            ) : (
-              <>
-                {getResult().includes("Win") ? (
-                  message && (
-                    <p className="message fade-in">
-                      "{message}" - by <strong>You</strong>
-                    </p>
-                  )
-                ) : (
-                  opponentMessage && (
-                    <p className="message fade-in">
-                      "{opponentMessage}" - by <strong>{opponentName}</strong>
-                    </p>
-                  )
-                )}
-              </>
-            )}
-
-            {/* 游戏结束判断 */}
-            {(playerHealth <= 0 || opponentHealth <= 0) ? (
-              <>
-                <p className="result-text">GAME OVER!</p>
-                <button 
-                  onClick={resetGame}
-                  className="button button-blue"
-                >
-                  Start New Game
-                </button>
-              </>
-            ) : (
-              <button 
-                onClick={nextRound}
-                className="button button-green"
-              >
-                Next Round
-              </button>
-            )}
-          </>
-        )}
+          )}
+        </div>
       </div>
-    )}
-  </div>
-)}
-
-
-
+    </div>
+  );
+}
