@@ -283,7 +283,7 @@ export default function App() {
           setOpponentMessage(data[opponentKey].message || "");
         }
 
-        if (data.playerAHealth <= 0 || data.playerBHealth <= 0) {
+        if (data.playerAHealth <0 || data.playerBHealth <0) {
           setStep("gameover");
         } else if (data.playerA?.nextRound && data.playerB?.nextRound) {
           // 重置游戏相关状态
