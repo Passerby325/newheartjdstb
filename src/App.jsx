@@ -425,24 +425,42 @@ export default function App() {
         setError("生命值更新失败: " + err.message);
       }
     };
-
-    // 触发条件判断
-    if (step === "game" && (hasConfirmed && opponentConfirmed) || gameCountdown === 0) {
+const handleGameResult = async () => {
+    if (step === "game" && ((hasConfirmed && opponentConfirmed) || gameCountdown === 0)) {
       if (choice && opponentChoice) {
-        const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
-                     (choice === "Paper" && opponentChoice === "Rock") ||
-                     (choice === "Scissors" && opponentChoice === "Paper");
-        
-        if (choice !== opponentChoice) {
-          updateHealthAndGameState(isWin);
+        // 处理平局情况
+        if (choice === opponentChoice) {
+          const newPlayerHealth = Math.max(0, playerHealth - 1);
+          const newOpponentHealth = Math.max(0, opponentHealth - 1);
+          
+          // 更新本地状态
+          setPlayerHealth(newPlayerHealth);
+          setOpponentHealth(newOpponentHealth);
+          
+          // 更新Firebase
+          await updateGameState(newPlayerHealth, newOpponentHealth);
+          
+          // 检查游戏结束条件
+          if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
+            await update(ref(db, `rooms/${roomCode}/status`), "gameover");
+          }
+        } else {
+          // 处理胜负情况
+          const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
+                       (choice === "Paper" && opponentChoice === "Rock") ||
+                       (choice === "Scissors" && opponentChoice === "Paper");
+          await updateHealthAndGameState(isWin);
         }
       }
       
       setStep("result");
       setResultStep(0);
     }
-  }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice]);
+  };
 
+  handleGameResult();
+}, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, updateGameState, roomCode, db, playerHealth, opponentHealth, updateHealthAndGameState]);
+  
   return (
     <div className="app-container">
       <div className="max-width-container">
