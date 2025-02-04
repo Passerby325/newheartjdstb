@@ -391,11 +391,17 @@ export default function App() {
       let newPlayerHealth = playerHealth;
       let newOpponentHealth = opponentHealth;
 
-      // 计算新生命值
-      if (isWin) {
-        newOpponentHealth = Math.max(0, opponentHealth - 1);
+      if (choice === opponentChoice) {
+        // 平局情况：每人扣1点血，但不低于1点
+        if (playerHealth > 1) newPlayerHealth = playerHealth - 1;
+        if (opponentHealth > 1) newOpponentHealth = opponentHealth - 1;
       } else {
-        newPlayerHealth = Math.max(0, playerHealth - 1);
+        // 胜负情况
+        if (isWin) {
+          newOpponentHealth = Math.max(0, opponentHealth - 1);
+        } else {
+          newPlayerHealth = Math.max(0, playerHealth - 1);
+        }
       }
 
       // 更新本地状态
@@ -405,16 +411,13 @@ export default function App() {
       // 更新Firebase
       try {
         const updates = {};
-        const healthUpdatePath = isPlayerA ? {
-          playerA: newPlayerHealth,
-          playerB: newOpponentHealth
-        } : {
-          playerB: newPlayerHealth,
-          playerA: newOpponentHealth
-        };
-
-        updates[`rooms/${roomCode}/playerAHealth`] = healthUpdatePath.playerA;
-        updates[`rooms/${roomCode}/playerBHealth`] = healthUpdatePath.playerB;
+        if (isPlayerA) {
+          updates[`rooms/${roomCode}/playerAHealth`] = newPlayerHealth;
+          updates[`rooms/${roomCode}/playerBHealth`] = newOpponentHealth;
+        } else {
+          updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
+          updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
+        }
 
         if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
           updates[`rooms/${roomCode}/status`] = "gameover";
@@ -431,28 +434,7 @@ export default function App() {
         if (choice && opponentChoice) {
           // 处理平局情况
           if (choice === opponentChoice) {
-            let newPlayerHealth = playerHealth;
-            let newOpponentHealth = opponentHealth;
-            
-            // 只扣除1点血量，且确保不会低于1点血
-            if (playerHealth > 1 && opponentHealth > 1) {
-              newPlayerHealth = Math.max(1, playerHealth - 1);
-              newOpponentHealth = Math.max(1, opponentHealth - 1);
-              
-              // 更新本地状态和Firebase
-              const updates = {};
-              if (isPlayerA) {
-                updates[`rooms/${roomCode}/playerAHealth`] = newPlayerHealth;
-                updates[`rooms/${roomCode}/playerBHealth`] = newOpponentHealth;
-              } else {
-                updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
-                updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
-              }
-              await update(ref(db), updates);
-              
-              setPlayerHealth(newPlayerHealth);
-              setOpponentHealth(newOpponentHealth);
-            }
+            await updateHealthAndGameState(null); // 传null表示平局
           } else {
             // 处理胜负情况
             const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
