@@ -431,26 +431,27 @@ export default function App() {
         if (choice && opponentChoice) {
           // 处理平局情况
           if (choice === opponentChoice) {
-            // 新的平局处理逻辑
             let newPlayerHealth = playerHealth;
             let newOpponentHealth = opponentHealth;
             
-            // 只有当双方血量都大于1时才扣血
+            // 只扣除1点血量，且确保不会低于1点血
             if (playerHealth > 1 && opponentHealth > 1) {
-              newPlayerHealth = playerHealth - 1;
-              newOpponentHealth = opponentHealth - 1;
+              newPlayerHealth = Math.max(1, playerHealth - 1);
+              newOpponentHealth = Math.max(1, opponentHealth - 1);
               
-              // 更新本地状态
+              // 更新本地状态和Firebase
+              const updates = {};
+              if (isPlayerA) {
+                updates[`rooms/${roomCode}/playerAHealth`] = newPlayerHealth;
+                updates[`rooms/${roomCode}/playerBHealth`] = newOpponentHealth;
+              } else {
+                updates[`rooms/${roomCode}/playerBHealth`] = newPlayerHealth;
+                updates[`rooms/${roomCode}/playerAHealth`] = newOpponentHealth;
+              }
+              await update(ref(db), updates);
+              
               setPlayerHealth(newPlayerHealth);
               setOpponentHealth(newOpponentHealth);
-              
-              // 更新Firebase
-              await updateGameState(newPlayerHealth, newOpponentHealth);
-            }
-            
-            // 检查游戏结束条件
-            if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-              await update(ref(db, `rooms/${roomCode}/status`), "gameover");
             }
           } else {
             // 处理胜负情况
