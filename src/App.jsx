@@ -399,9 +399,11 @@ export default function App() {
         let newOpponentHealth = opponentHealth;
 
         if (choice === opponentChoice) {
-          // 平局时双方各扣1点生命值
-          newPlayerHealth = Math.max(0, playerHealth - 1);
-          newOpponentHealth = Math.max(0, opponentHealth - 1);
+          // 平局时双方各扣1点生命值，但确保不会同时减到0
+          if (playerHealth > 1 || opponentHealth > 1) {
+            newPlayerHealth = Math.max(1, playerHealth - 1);
+            newOpponentHealth = Math.max(1, opponentHealth - 1);
+          }
         } else {
           const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
                        (choice === "Paper" && opponentChoice === "Rock") ||
