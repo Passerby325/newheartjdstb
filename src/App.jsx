@@ -385,6 +385,8 @@ export default function App() {
     };
   }, [step, resultCountdown, resultStep, playerHealth, opponentHealth]);
 
+  const [hasProcessedResult, setHasProcessedResult] = useState(false);
+
  // 🎮 检查游戏结束并更新生命值
   useEffect(() => {
     const updateHealthAndGameState = async (isWin) => {
@@ -427,41 +429,53 @@ export default function App() {
     };
 
     const handleGameResult = async () => {
-      if (step === "game" && ((hasConfirmed && opponentConfirmed) || gameCountdown === 0)) {
-        if (choice && opponentChoice) {
-          // 处理平局情况
-          if (choice === opponentChoice) {
-            const newPlayerHealth = Math.max(0, playerHealth - 1);
-            const newOpponentHealth = Math.max(0, opponentHealth - 1);
-            
-            // 更新本地状态
-            setPlayerHealth(newPlayerHealth);
-            setOpponentHealth(newOpponentHealth);
-            
-            // 更新Firebase
-            await updateGameState(newPlayerHealth, newOpponentHealth);
-            
-            // 检查游戏结束条件
-            if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-              await update(ref(db, `rooms/${roomCode}/status`), "gameover");
-            }
-          } else {
-            // 处理胜负情况
-            const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
-                         (choice === "Paper" && opponentChoice === "Rock") ||
-                         (choice === "Scissors" && opponentChoice === "Paper");
-            await updateHealthAndGameState(isWin);
+    if (
+      step === "game" &&
+      ((hasConfirmed && opponentConfirmed) || gameCountdown === 0) &&
+      !hasProcessedResult  // 只执行一次
+    ) {
+      if (choice && opponentChoice) {
+        if (choice === opponentChoice) {
+          const newPlayerHealth = Math.max(0, playerHealth - 1);
+          const newOpponentHealth = Math.max(0, opponentHealth - 1);
+          
+          setPlayerHealth(newPlayerHealth);
+          setOpponentHealth(newOpponentHealth);
+          
+          await updateGameState(newPlayerHealth, newOpponentHealth);
+          
+          if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
+            await update(ref(db, `rooms/${roomCode}/status`), "gameover");
           }
+        } else {
+          const isWin =
+            (choice === "Rock" && opponentChoice === "Scissors") ||
+            (choice === "Paper" && opponentChoice === "Rock") ||
+            (choice === "Scissors" && opponentChoice === "Paper");
+          await updateHealthAndGameState(isWin);
         }
-        
-        setStep("result");
-        setResultStep(0);
       }
-    };
+      
+      setStep("result");
+      setResultStep(0);
+      setHasProcessedResult(true);  // 标记已经处理
+    }
+  };
 
-    handleGameResult();
-  }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, updateGameState, roomCode, db, playerHealth, opponentHealth]);
-
+  handleGameResult();
+}, [
+  hasConfirmed,
+  opponentConfirmed,
+  gameCountdown,
+  step,
+  choice,
+  opponentChoice,
+  updateGameState,
+  roomCode,
+  db,
+  playerHealth,
+  opponentHealth
+]);
 
   return (
     <div className="app-container">
