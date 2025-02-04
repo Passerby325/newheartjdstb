@@ -391,15 +391,18 @@ export default function App() {
       // 只在双方都做出选择时更新
       if (!choice || !opponentChoice) return;
 
+      // 防止重复更新
+      if (step !== "game") return;
+
       let newPlayerHealth = playerHealth;
       let newOpponentHealth = opponentHealth;
 
       // 平局情况
       if (choice === opponentChoice) {
-        console.log('平局，当前血量:', playerHealth, opponentHealth); // 调试日志
+        console.log('平局，当前血量:', playerHealth, opponentHealth);
         if (playerHealth > 1) newPlayerHealth = playerHealth - 1;
         if (opponentHealth > 1) newOpponentHealth = opponentHealth - 1;
-        console.log('平局后血量:', newPlayerHealth, newOpponentHealth); // 调试日志
+        console.log('平局后血量:', newPlayerHealth, newOpponentHealth);
       } else {
         // 胜负情况
         const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
@@ -411,6 +414,13 @@ export default function App() {
         } else {
           newPlayerHealth = Math.max(0, playerHealth - 1);
         }
+      }
+
+      // 如果血量没有变化，直接返回
+      if (newPlayerHealth === playerHealth && newOpponentHealth === opponentHealth) {
+        setStep("result");
+        setResultStep(0);
+        return;
       }
 
       // 更新Firebase
@@ -438,16 +448,17 @@ export default function App() {
       } catch (err) {
         setError("生命值更新失败: " + err.message);
       }
+
+      // 更新完成后切换到结果页面
+      setStep("result");
+      setResultStep(0);
     };
 
-    // 只在游戏阶段且双方都确认选择后更新
+    // 只在游戏阶段且双方都确认选择后更新，并且只更新一次
     if (step === "game" && hasConfirmed && opponentConfirmed) {
-      updateHealthAndGameState().then(() => {
-        setStep("result");
-        setResultStep(0);
-      });
+      updateHealthAndGameState();
     }
-  }, [hasConfirmed, opponentConfirmed, step, choice, opponentChoice, playerHealth, opponentHealth, isPlayerA, roomCode, db]);
+  }, [hasConfirmed, opponentConfirmed]); // 减少依赖项，只在确认状态改变时触发
 
 
   return (
