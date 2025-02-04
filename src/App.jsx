@@ -363,14 +363,14 @@ export default function App() {
         timer = setInterval(() => {
           setResultCountdown(prev => prev - 1);
         }, 1000);
-      } else if (resultStep < 5) {
+      } else if (resultStep < 6) {
         timer = setTimeout(() => {
           setResultStep(prev => {
             const nextStep = prev + 1;
-            if (nextStep === 4) {
+            if (nextStep === 5) {
               // 检查游戏结束条件
               if (playerHealth <= 0 || opponentHealth <= 0) {
-                return 5; // 直接跳转到最终结果
+                return 6; // 直接跳转到最终结果
               }
             }
             return nextStep;
@@ -650,23 +650,41 @@ export default function App() {
                     </div>
                   )}
                   
-                  {/* Step 3: Show round result and messages */}
+                  {/* Step 3: Show round result */}
                   {resultStep >= 3 && (
                     <div className="fade-in">
                       {choice === opponentChoice ? (
-                        <div>
-                          <p>It's a tie!</p>
-                          {message && <p>You said: {message}</p>}
-                          {opponentMessage && <p>Opponent said: {opponentMessage}</p>}
-                        </div>
+                        <p>It's a tie!</p>
                       ) : (
-                        getResultMessage()
+                        <p style={{ 
+                          color: getResult() === "You Win This Round!" ? '#00FFFF' : '#FF0000'
+                        }}>
+                          {getResult()}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 4: Show messages */}
+                  {resultStep >= 4 && (
+                    <div className="fade-in">
+                      {choice === opponentChoice ? (
+                        <>
+                          {message && <p>"{message}" - by You</p>}
+                          {opponentMessage && <p>"{opponentMessage}" - by Opponent</p>}
+                        </>
+                      ) : (
+                        getResult() === "You Win This Round!" ? (
+                          message && <p>"{message}" - by You</p>
+                        ) : (
+                          opponentMessage && <p>"{opponentMessage}" - by {opponentName}</p>
+                        )
                       )}
                     </div>
                   )}
                   
-                  {/* Step 4: Show health status */}
-                  {resultStep >= 4 && (
+                  {/* Step 5: Show health status */}
+                  {resultStep >= 5 && (
                     <div className="health-status fade-in">
                       <p>Current Health Status:</p>
                       <p>You: {playerHealth}/5</p>
@@ -675,7 +693,7 @@ export default function App() {
                   )}
 
                   {/* Game over or next round button */}
-                  {resultStep >= 4 && (
+                  {resultStep >= 5 && (
                     <>
                       {(playerHealth <= 0 || opponentHealth <= 0) ? (
                         <>
