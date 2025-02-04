@@ -388,10 +388,7 @@ export default function App() {
  // 🎮 检查游戏结束并更新生命值
   useEffect(() => {
     const updateHealthAndGameState = async () => {
-      // 只在双方都做出选择时更新
       if (!choice || !opponentChoice) return;
-
-      // 防止重复更新
       if (step !== "game") return;
 
       let newPlayerHealth = playerHealth;
@@ -400,8 +397,9 @@ export default function App() {
       // 平局情况
       if (choice === opponentChoice) {
         console.log('平局，当前血量:', playerHealth, opponentHealth);
-        if (playerHealth > 1) newPlayerHealth = playerHealth - 1;
-        if (opponentHealth > 1) newOpponentHealth = opponentHealth - 1;
+        // 只有当血量大于1时才扣血
+        newPlayerHealth = playerHealth > 1 ? playerHealth - 1 : playerHealth;
+        newOpponentHealth = opponentHealth > 1 ? opponentHealth - 1 : opponentHealth;
         console.log('平局后血量:', newPlayerHealth, newOpponentHealth);
       } else {
         // 胜负情况
@@ -438,10 +436,7 @@ export default function App() {
           updates[`rooms/${roomCode}/status`] = "gameover";
         }
 
-        // 先更新Firebase
         await update(ref(db), updates);
-        
-        // 再更新本地状态
         setPlayerHealth(newPlayerHealth);
         setOpponentHealth(newOpponentHealth);
         
@@ -449,16 +444,14 @@ export default function App() {
         setError("生命值更新失败: " + err.message);
       }
 
-      // 更新完成后切换到结果页面
       setStep("result");
       setResultStep(0);
     };
 
-    // 只在游戏阶段且双方都确认选择后更新，并且只更新一次
     if (step === "game" && hasConfirmed && opponentConfirmed) {
       updateHealthAndGameState();
     }
-  }, [hasConfirmed, opponentConfirmed]); // 减少依赖项，只在确认状态改变时触发
+  }, [hasConfirmed, opponentConfirmed]);
 
 
   return (
