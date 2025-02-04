@@ -453,9 +453,50 @@ export default function App() {
     }
   }, [hasConfirmed, opponentConfirmed]);
 
+  const getResultMessage = () => {
+    if (!choice || !opponentChoice) return "";
+    
+    // 平局情况
+    if (choice === opponentChoice) {
+      return (
+        <div>
+          <p>You both chose {choice}!</p>
+          {message && <p>You said: {message}</p>}
+          {opponentMessage && <p>Opponent said: {opponentMessage}</p>}
+        </div>
+      );
+    }
+    
+    // 判断胜负
+    const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
+                  (choice === "Paper" && opponentChoice === "Rock") ||
+                  (choice === "Scissors" && opponentChoice === "Paper");
+
+    if (isWin) {
+      return (
+        <div>
+          <p>You win! {choice} beats {opponentChoice}</p>
+          {message && <p>You said: {message}</p>}
+        </div>
+      );
+    } else {
+      return (
+        <div>
+          <p>You lose! {opponentChoice} beats {choice}</p>
+          {opponentMessage && <p>Opponent said: {opponentMessage}</p>}
+        </div>
+      );
+    }
+  };
 
   return (
-    <div className="app-container">
+    <div className="container">
+      <h1>Rock Paper Scissors</h1>
+      <p>Create a room by entering a 4-character room code. Others can join your room by entering the same code.</p>
+      <p style={{color: '#FFD700'}}>This is a Rock Paper Scissors game with special rules:<br/>
+      1) In case of a tie, both players lose 1 HP<br/>
+      2) Players with only 1 HP left won't lose HP from ties</p>
+
       <div className="max-width-container">
         <div className="center-column">
           {error && (
@@ -593,81 +634,35 @@ export default function App() {
                   
                   {resultStep >= 1 && (
                     <p className="fade-in">
-                      <strong>You</strong> chose: {choice}
+                      {getResultMessage()}
                     </p>
                   )}
                   
-                  {resultStep >= 2 && (
-                    <p className="fade-in">
-                      <strong>{opponentName}</strong> chose: {opponentChoice}
-                    </p>
-                  )}
-                  
-                  {resultStep >= 3 && (
+                  {/* 始终显示生命值 */}
+                  <div className="health-status fade-in">
+                    <p>Current Health Status:</p>
+                    <p>You: {playerHealth}/5</p>
+                    <p>{opponentName}: {opponentHealth}/5</p>
+                  </div>
+
+                  {/* 游戏结束判断 */}
+                  {(playerHealth <= 0 || opponentHealth <= 0) ? (
                     <>
-                      <p className="result-text fade-in">
-                        {getResult()}
-                      </p>
-                      
-                      {/* 始终显示生命值 */}
-                      <div className="health-status fade-in">
-                        <p>Current Health Status:</p>
-                        <p>You: {playerHealth}/5</p>
-                        <p>{opponentName}: {opponentHealth}/5</p>
-                      </div>
-
-                      {/* 显示额外消息 */}
-                      {getResult() === "It's a tie!" ? (
-                        <>
-                          {message && (
-                            <p className="message fade-in">
-                              "{message}" - by <strong>You</strong>
-                            </p>
-                          )}
-                          {opponentMessage && (
-                            <p className="message fade-in">
-                              "{opponentMessage}" - by <strong>{opponentName}</strong>
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {getResult().includes("Win") ? (
-                            message && (
-                              <p className="message fade-in">
-                                "{message}" - by <strong>You</strong>
-                              </p>
-                            )
-                          ) : (
-                            opponentMessage && (
-                              <p className="message fade-in">
-                                "{opponentMessage}" - by <strong>{opponentName}</strong>
-                              </p>
-                            )
-                          )}
-                        </>
-                      )}
-
-                      {/* 游戏结束判断 */}
-                      {(playerHealth <= 0 || opponentHealth <= 0) ? (
-                        <>
-                          <p className="result-text">GAME OVER!</p>
-                          <button 
-                            onClick={resetGame}
-                            className="button button-blue"
-                          >
-                            Start New Game
-                          </button>
-                        </>
-                      ) : (
-                        <button 
-                          onClick={nextRound}
-                          className="button button-green"
-                        >
-                          Next Round
-                        </button>
-                      )}
+                      <p className="result-text">GAME OVER!</p>
+                      <button 
+                        onClick={resetGame}
+                        className="button button-blue"
+                      >
+                        Start New Game
+                      </button>
                     </>
+                  ) : (
+                    <button 
+                      onClick={nextRound}
+                      className="button button-green"
+                    >
+                      Next Round
+                    </button>
                   )}
                 </div>
               )}
