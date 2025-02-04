@@ -385,66 +385,90 @@ export default function App() {
     };
   }, [step, resultCountdown, resultStep, playerHealth, opponentHealth]);
 
-  const [hasProcessedResult, setHasProcessedResult] = useState(false);
-
-  // 🎮 检查游戏结束并更新生命值
+ // 🎮 检查游戏结束并更新生命值
   useEffect(() => {
-    const handleGameResult = async () => {
-      if (
-        step === "game" &&
-        ((hasConfirmed && opponentConfirmed) || gameCountdown === 0) &&
-        !hasProcessedResult  // 只执行一次
-      ) {
-        let newPlayerHealth = playerHealth;
-        let newOpponentHealth = opponentHealth;
+    const updateHealthAndGameState = async (isWin) => {
+      let newPlayerHealth = playerHealth;
+      let newOpponentHealth = opponentHealth;
 
-        if (choice === opponentChoice) {
-          // 平局时双方各扣1点生命值，但确保不会同时减到0
-          if (playerHealth > 1 || opponentHealth > 1) {
-            newPlayerHealth = playerHealth - 1;
-            newOpponentHealth = opponentHealth - 1;
-          }
-        } else {
-          const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
-                       (choice === "Paper" && opponentChoice === "Rock") ||
-                       (choice === "Scissors" && opponentChoice === "Paper");
-          
-          if (isWin) {
-            newOpponentHealth = Math.max(0, opponentHealth - 1);
-          } else {
-            newPlayerHealth = Math.max(0, playerHealth - 1);
-          }
-        }
+      // 计算新生命值
+      if (isWin) {
+        newOpponentHealth = Math.max(0, opponentHealth - 1);
+      } else {
+        newPlayerHealth = Math.max(0, playerHealth - 1);
+      }
 
-        // 更新生命值
-        await updateGameState(newPlayerHealth, newOpponentHealth);
+      // 更新本地状态
+      setPlayerHealth(newPlayerHealth);
+      setOpponentHealth(newOpponentHealth);
 
-        // 检查游戏是否结束
+      // 更新Firebase
+      try {
+        const updates = {};
+        const healthUpdatePath = isPlayerA ? {
+          playerA: newPlayerHealth,
+          playerB: newOpponentHealth
+        } : {
+          playerB: newPlayerHealth,
+          playerA: newOpponentHealth
+        };
+
+        updates[`rooms/${roomCode}/playerAHealth`] = healthUpdatePath.playerA;
+        updates[`rooms/${roomCode}/playerBHealth`] = healthUpdatePath.playerB;
+
         if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-          await update(ref(db, `rooms/${roomCode}`), { status: "gameover" });
+          updates[`rooms/${roomCode}/status`] = "gameover";
         }
 
+        await update(ref(db), updates);
+      } catch (err) {
+        setError("生命值更新失败: " + err.message);
+      }
+    };
+
+    const handleGameResult = async () => {
+      if (step === "game" && ((hasConfirmed && opponentConfirmed) || gameCountdown === 0)) {
+        if (choice && opponentChoice) {
+          // 处理平局情况
+          if (choice === opponentChoice) {
+            // 新的平局处理逻辑
+            let newPlayerHealth = playerHealth;
+            let newOpponentHealth = opponentHealth;
+            
+            // 只有当双方血量都大于1时才扣血
+            if (playerHealth > 1 && opponentHealth > 1) {
+              newPlayerHealth = playerHealth - 1;
+              newOpponentHealth = opponentHealth - 1;
+              
+              // 更新本地状态
+              setPlayerHealth(newPlayerHealth);
+              setOpponentHealth(newOpponentHealth);
+              
+              // 更新Firebase
+              await updateGameState(newPlayerHealth, newOpponentHealth);
+            }
+            
+            // 检查游戏结束条件
+            if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
+              await update(ref(db, `rooms/${roomCode}/status`), "gameover");
+            }
+          } else {
+            // 处理胜负情况
+            const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
+                         (choice === "Paper" && opponentChoice === "Rock") ||
+                         (choice === "Scissors" && opponentChoice === "Paper");
+            await updateHealthAndGameState(isWin);
+          }
+        }
+        
         setStep("result");
         setResultStep(0);
-        setHasProcessedResult(true);
       }
     };
 
     handleGameResult();
-  }, [
-    step,
-    hasConfirmed,
-    opponentConfirmed,
-    gameCountdown,
-    choice,
-    opponentChoice,
-    playerHealth,
-    opponentHealth,
-    updateGameState,
-    roomCode,
-    db,
-    hasProcessedResult
-  ]);
+  }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, updateGameState, roomCode, db, playerHealth, opponentHealth]);
+
 
   return (
     <div className="app-container">
