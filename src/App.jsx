@@ -363,14 +363,14 @@ export default function App() {
         timer = setInterval(() => {
           setResultCountdown(prev => prev - 1);
         }, 1000);
-      } else if (resultStep < 4) {
+      } else if (resultStep < 5) {
         timer = setTimeout(() => {
           setResultStep(prev => {
             const nextStep = prev + 1;
-            if (nextStep === 3) {
+            if (nextStep === 4) {
               // 检查游戏结束条件
               if (playerHealth <= 0 || opponentHealth <= 0) {
-                return 4; // 直接跳转到最终结果
+                return 5; // 直接跳转到最终结果
               }
             }
             return nextStep;
@@ -491,11 +491,15 @@ export default function App() {
 
   return (
     <div className="container">
-      <h1>Rock Paper Scissors</h1>
-      <p>Create a room by entering a 4-character room code. Others can join your room by entering the same code.</p>
-      <p style={{color: '#FFD700'}}>This is a Rock Paper Scissors game with special rules:<br/>
-      1) In case of a tie, both players lose 1 HP<br/>
-      2) Players with only 1 HP left won't lose HP from ties</p>
+      {step === "login" && (
+        <>
+          <h1>Rock Paper Scissors</h1>
+          <p>Create a room by entering a 4-character room code. Others can join your room by entering the same code.</p>
+          <p style={{color: '#FFD700'}}>This is a Rock Paper Scissors game with special rules:<br/>
+          1) In case of a tie, both players lose 1 HP<br/>
+          2) Players with only 1 HP left won't lose HP from ties</p>
+        </>
+      )}
 
       <div className="max-width-container">
         <div className="center-column">
@@ -632,37 +636,66 @@ export default function App() {
                 <div className={`result-container ${isShaking ? 'shake' : ''}`}>
                   <h2 className="result-title">Results:</h2>
                   
+                  {/* Step 1: Show your choice */}
                   {resultStep >= 1 && (
-                    <p className="fade-in">
-                      {getResultMessage()}
-                    </p>
+                    <div className="fade-in">
+                      <p>You chose: {choice}</p>
+                    </div>
                   )}
                   
-                  {/* 始终显示生命值 */}
-                  <div className="health-status fade-in">
-                    <p>Current Health Status:</p>
-                    <p>You: {playerHealth}/5</p>
-                    <p>{opponentName}: {opponentHealth}/5</p>
-                  </div>
+                  {/* Step 2: Show opponent's choice */}
+                  {resultStep >= 2 && (
+                    <div className="fade-in">
+                      <p>Opponent chose: {opponentChoice}</p>
+                    </div>
+                  )}
+                  
+                  {/* Step 3: Show round result and messages */}
+                  {resultStep >= 3 && (
+                    <div className="fade-in">
+                      {choice === opponentChoice ? (
+                        <div>
+                          <p>It's a tie!</p>
+                          {message && <p>You said: {message}</p>}
+                          {opponentMessage && <p>Opponent said: {opponentMessage}</p>}
+                        </div>
+                      ) : (
+                        getResultMessage()
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Step 4: Show health status */}
+                  {resultStep >= 4 && (
+                    <div className="health-status fade-in">
+                      <p>Current Health Status:</p>
+                      <p>You: {playerHealth}/5</p>
+                      <p>{opponentName}: {opponentHealth}/5</p>
+                    </div>
+                  )}
 
-                  {/* 游戏结束判断 */}
-                  {(playerHealth <= 0 || opponentHealth <= 0) ? (
+                  {/* Game over or next round button */}
+                  {resultStep >= 4 && (
                     <>
-                      <p className="result-text">GAME OVER!</p>
-                      <button 
-                        onClick={resetGame}
-                        className="button button-blue"
-                      >
-                        Start New Game
-                      </button>
+                      {(playerHealth <= 0 || opponentHealth <= 0) ? (
+                        <>
+                          <p className="result-text">GAME OVER!</p>
+                          <button 
+                            onClick={resetGame}
+                            className="button button-blue"
+                          >
+                            Start New Game
+                          </button>
+                        </>
+                      ) : (
+                        <button 
+                          onClick={nextRound}
+                          className="button button-green"
+                        >
+                          Next Round
+                        </button>
+                      )}
                     </>
-                  ) : (
-                    <button 
-                      onClick={nextRound}
-                      className="button button-green"
-                    >
-                      Next Round
-                    </button>
                   )}
                 </div>
               )}
