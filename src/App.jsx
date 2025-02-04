@@ -434,20 +434,23 @@ export default function App() {
       ((hasConfirmed && opponentConfirmed) || gameCountdown === 0) &&
       !hasProcessedResult  // 只执行一次
     ) {
-      if (choice && opponentChoice) {
-        if (choice === opponentChoice) {
-          const newPlayerHealth = Math.max(0, playerHealth - 1);
-          const newOpponentHealth = Math.max(0, opponentHealth - 1);
-          
-          setPlayerHealth(newPlayerHealth);
-          setOpponentHealth(newOpponentHealth);
-          
-          await updateGameState(newPlayerHealth, newOpponentHealth);
-          
-          if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
-            await update(ref(db, `rooms/${roomCode}/status`), "gameover");
-          }
-        } else {
+      if (choice === opponentChoice) {
+  // 双方各扣1点生命值
+  const newPlayerHealth = Math.max(0, playerHealth - 1);
+  const newOpponentHealth = Math.max(0, opponentHealth - 1);
+  
+  setPlayerHealth(newPlayerHealth);
+  setOpponentHealth(newOpponentHealth);
+  
+  // 正确调用updateGameState更新生命值
+  await updateGameState(newPlayerHealth, newOpponentHealth);
+  
+  // 检查是否需要结束游戏
+  if (newPlayerHealth <= 0 || newOpponentHealth <= 0) {
+    // 正确更新房间状态
+    await update(ref(db, `rooms/${roomCode}`), { status: "gameover" });
+  }
+} else {
           const isWin =
             (choice === "Rock" && opponentChoice === "Scissors") ||
             (choice === "Paper" && opponentChoice === "Rock") ||
