@@ -387,26 +387,31 @@ export default function App() {
 
  // 🎮 检查游戏结束并更新生命值
   useEffect(() => {
-    const updateHealthAndGameState = async (isWin) => {
+    const updateHealthAndGameState = async () => {
+      // 只在双方都做出选择时更新
+      if (!choice || !opponentChoice) return;
+
       let newPlayerHealth = playerHealth;
       let newOpponentHealth = opponentHealth;
 
+      // 平局情况
       if (choice === opponentChoice) {
-        // 平局情况：每人扣1点血，但不低于1点
+        console.log('平局，当前血量:', playerHealth, opponentHealth); // 调试日志
         if (playerHealth > 1) newPlayerHealth = playerHealth - 1;
         if (opponentHealth > 1) newOpponentHealth = opponentHealth - 1;
+        console.log('平局后血量:', newPlayerHealth, newOpponentHealth); // 调试日志
       } else {
         // 胜负情况
+        const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
+                     (choice === "Paper" && opponentChoice === "Rock") ||
+                     (choice === "Scissors" && opponentChoice === "Paper");
+        
         if (isWin) {
           newOpponentHealth = Math.max(0, opponentHealth - 1);
         } else {
           newPlayerHealth = Math.max(0, playerHealth - 1);
         }
       }
-
-      // 更新本地状态
-      setPlayerHealth(newPlayerHealth);
-      setOpponentHealth(newOpponentHealth);
 
       // 更新Firebase
       try {
@@ -423,34 +428,26 @@ export default function App() {
           updates[`rooms/${roomCode}/status`] = "gameover";
         }
 
+        // 先更新Firebase
         await update(ref(db), updates);
+        
+        // 再更新本地状态
+        setPlayerHealth(newPlayerHealth);
+        setOpponentHealth(newOpponentHealth);
+        
       } catch (err) {
         setError("生命值更新失败: " + err.message);
       }
     };
 
-    const handleGameResult = async () => {
-      if (step === "game" && ((hasConfirmed && opponentConfirmed) || gameCountdown === 0)) {
-        if (choice && opponentChoice) {
-          // 处理平局情况
-          if (choice === opponentChoice) {
-            await updateHealthAndGameState(null); // 传null表示平局
-          } else {
-            // 处理胜负情况
-            const isWin = (choice === "Rock" && opponentChoice === "Scissors") ||
-                         (choice === "Paper" && opponentChoice === "Rock") ||
-                         (choice === "Scissors" && opponentChoice === "Paper");
-            await updateHealthAndGameState(isWin);
-          }
-        }
-        
+    // 只在游戏阶段且双方都确认选择后更新
+    if (step === "game" && hasConfirmed && opponentConfirmed) {
+      updateHealthAndGameState().then(() => {
         setStep("result");
         setResultStep(0);
-      }
-    };
-
-    handleGameResult();
-  }, [hasConfirmed, opponentConfirmed, gameCountdown, step, choice, opponentChoice, updateGameState, roomCode, db, playerHealth, opponentHealth]);
+      });
+    }
+  }, [hasConfirmed, opponentConfirmed, step, choice, opponentChoice, playerHealth, opponentHealth, isPlayerA, roomCode, db]);
 
 
   return (
